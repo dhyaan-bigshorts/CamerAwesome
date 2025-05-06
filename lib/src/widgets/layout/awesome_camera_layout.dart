@@ -1,5 +1,3 @@
-// ignore_for_file: unused_import
-
 import 'dart:io';
 
 import 'package:camerawesome/src/orchestrator/models/capture_modes.dart';
@@ -16,9 +14,13 @@ import 'package:flutter/material.dart';
 /// This widget doesn't handle [PreparingCameraState]
 class AwesomeCameraLayout extends StatelessWidget {
   final CameraState state;
-  final Widget middleContent;
-  final Widget topActions;
-  final Widget bottomActions;
+  final Widget? middleContent;
+  final Widget? topActions;
+  final Widget? bottomActions;
+
+  // Add reset button functionality
+  final VoidCallback? onResetPressed;
+  final bool hasRecordedVideos;
 
   AwesomeCameraLayout({
     super.key,
@@ -27,10 +29,25 @@ class AwesomeCameraLayout extends StatelessWidget {
     Widget? middleContent,
     Widget? topActions,
     Widget? bottomActions,
+    this.onResetPressed, // New parameter
+    this.hasRecordedVideos = false, // New parameter
   })  : middleContent = middleContent ??
             (Column(
               children: [
                 const Spacer(),
+                // Add reset button when there are recorded videos
+                if (hasRecordedVideos)
+                  Padding(
+                    padding: const EdgeInsets.only(bottom: 16.0),
+                    child: IconButton(
+                      icon: const Icon(
+                        Icons.refresh,
+                        color: Colors.white,
+                      ),
+                      tooltip: 'Delete last video',
+                      onPressed: onResetPressed,
+                    ),
+                  ),
                 if (state is PhotoCameraState && state.hasFilters)
                   AwesomeFilterWidget(state: state)
                 else if (!kIsWeb && Platform.isAndroid)
@@ -49,15 +66,15 @@ class AwesomeCameraLayout extends StatelessWidget {
       bottom: false,
       child: Column(
         children: [
-          topActions,
-          Expanded(child: middleContent),
+          topActions!,
+          Expanded(child: middleContent!),
           Container(
             color: theme.bottomActionsBackgroundColor,
             child: SafeArea(
               top: false,
               child: Column(
                 children: [
-                  bottomActions,
+                  bottomActions!,
                 ],
               ),
             ),

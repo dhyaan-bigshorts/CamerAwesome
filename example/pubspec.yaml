@@ -22,12 +22,13 @@ dependencies:
   meta: ^1.10.0
   rxdart: ^0.28.0
   video_player: ^2.9.2
+  image_gallery_saver_plus: ^4.0.1
 
 dev_dependencies:
   exif: ^3.3.0
   flutter_test:
     sdk: flutter
-  patrol: ^3.14.0
+  # patrol: ^3.14.0
   flutter_lints: ^3.0.1
 
 flutter:

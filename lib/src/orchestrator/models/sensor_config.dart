@@ -42,7 +42,7 @@ class SensorConfig {
     Sensor? sensor,
     FlashMode flashMode = FlashMode.none,
     double zoom = 0.0,
-    CameraAspectRatios aspectRatio = CameraAspectRatios.ratio_4_3,
+    CameraAspectRatios aspectRatio = CameraAspectRatios.ratio_16_9,
   }) : this._(
           sensors: [sensor ?? Sensor.position(SensorPosition.back)],
           flash: flashMode,
@@ -54,7 +54,7 @@ class SensorConfig {
     required List<Sensor> sensors,
     FlashMode flashMode = FlashMode.none,
     double zoom = 0.0,
-    CameraAspectRatios aspectRatio = CameraAspectRatios.ratio_4_3,
+    CameraAspectRatios aspectRatio = CameraAspectRatios.ratio_16_9,
   }) : this._(
           sensors: sensors,
           flash: flashMode,
@@ -65,7 +65,7 @@ class SensorConfig {
   SensorConfig._({
     required this.sensors,
     FlashMode flash = FlashMode.none,
-    CameraAspectRatios aspectRatio = CameraAspectRatios.ratio_4_3,
+    CameraAspectRatios aspectRatio = CameraAspectRatios.ratio_16_9,
 
     /// Zoom must be between 0.0 (no zoom) and 1.0 (max zoom)
     double currentZoom = 0.0,

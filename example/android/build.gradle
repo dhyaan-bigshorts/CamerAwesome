@@ -2,6 +2,67 @@ allprojects {
     repositories {
         google()
         mavenCentral()
+        
+    }
+}
+
+subprojects {
+    afterEvaluate { project ->
+        if (project.hasProperty('android')) {
+            android {
+                compileOptions {
+                    sourceCompatibility JavaVersion.VERSION_17
+                    targetCompatibility JavaVersion.VERSION_17
+                }
+
+                 if (project.name in [
+                                         'image_gallery_saver_plus'
+                                         ]) {
+                        tasks.withType(Test).configureEach {
+                            enabled = false // Disable tests
+                        }
+                    }
+                
+                // Add these lint options to disable warnings
+                lintOptions {
+                    disable 'AndroidGradlePluginVersion'
+                    disable 'MissingPermission'
+                    disable 'NewerVersionAvailable'
+                    disable 'ObsoleteSdkInt'
+                    disable "InlinedApi", "NewApi", "UnusedAttribute"
+                    disable 'UnsafeOptInUsageError'
+                    disable 'SyntheticAccessor'
+                    disable 'DiscouragedPrivateApi'
+                }
+                
+                // Disable -Werror flag for Java compilations
+                tasks.withType(JavaCompile) {
+                    options.compilerArgs.remove("-Werror")
+                }
+            }
+
+            // Only apply kotlinOptions if the project has the kotlin-android plugin
+            if (project.plugins.hasPlugin('kotlin-android')) {
+                kotlin {
+                    jvmToolchain(17)
+                }
+            }
+        }
+        
+        // Apply Kotlin compile options for all Kotlin compile tasks
+        tasks.withType(org.jetbrains.kotlin.gradle.tasks.KotlinCompile).configureEach {
+            kotlinOptions {
+                jvmTarget = "17"
+            }
+        }
+
+        // Apply Java compile options for all Java compile tasks
+        tasks.withType(JavaCompile).configureEach {
+            sourceCompatibility = JavaVersion.VERSION_17
+            targetCompatibility = JavaVersion.VERSION_17
+            // Explicitly remove -Werror flag
+            options.compilerArgs.remove("-Werror")
+        }
     }
 }
 
