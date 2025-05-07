@@ -65,6 +65,7 @@ class AwesomeCameraLayout extends StatelessWidget {
     return SafeArea(
       bottom: false,
       child: Column(
+        mainAxisSize: MainAxisSize.max,
         children: [
           topActions!,
           Expanded(child: middleContent!),

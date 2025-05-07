@@ -3,10 +3,12 @@ package com.apparence.camerawesome.cameraX
 import android.Manifest
 import android.annotation.SuppressLint
 import android.app.Activity
+import android.content.Context
 import android.content.Intent
 import android.content.pm.PackageManager
 import android.graphics.*
 import android.hardware.camera2.CameraCharacteristics
+import android.hardware.camera2.CameraManager
 import android.location.Location
 import android.os.*
 import android.util.Log
@@ -45,6 +47,7 @@ import java.io.FileOutputStream
 import java.io.IOException
 import java.util.concurrent.TimeUnit
 import kotlin.coroutines.resume
+import kotlin.math.max
 import kotlin.math.roundToInt
 import kotlinx.coroutines.*
 
@@ -628,9 +631,155 @@ class CameraAwesomeX : CameraInterface, FlutterPlugin, ActivityAware {
     }
 
     override fun getBackSensors(): List<PigeonSensorTypeDevice> {
-        TODO("Not yet implemented")
-    }
+        val cameraManager = activity!!.getSystemService(Context.CAMERA_SERVICE) as CameraManager
+        val sensors = mutableListOf<PigeonSensorTypeDevice>()
 
+        try {
+            // Get all camera IDs available on the device
+            val cameraIds = cameraManager.cameraIdList
+            Log.d(CamerawesomePlugin.TAG, "Available camera IDs: ${cameraIds.joinToString()}")
+
+            // Process each camera
+            for (cameraId in cameraIds) {
+                // Get camera characteristics
+                val characteristics = cameraManager.getCameraCharacteristics(cameraId)
+
+                // Check if this is a back-facing camera
+                val facing = characteristics.get(CameraCharacteristics.LENS_FACING)
+                if (facing != CameraCharacteristics.LENS_FACING_BACK) {
+                    continue
+                }
+
+                // Get focal length
+                val focalLengths =
+                        characteristics.get(CameraCharacteristics.LENS_INFO_AVAILABLE_FOCAL_LENGTHS)
+                if (focalLengths == null || focalLengths.size == 0) {
+                    continue
+                }
+
+                // Get sensor size
+                val sensorSize =
+                        characteristics.get(CameraCharacteristics.SENSOR_INFO_PHYSICAL_SIZE)
+                if (sensorSize == null) {
+                    Log.d(CamerawesomePlugin.TAG, "Sensor size not available for camera $cameraId")
+                    continue
+                }
+
+                // Calculate crop factor (35mm equivalent is a standard in photography)
+                val size35mm = Size(36, 24) // Standard 35mm film size
+                val cropFactor =
+                        max(size35mm.width, size35mm.height).toFloat() /
+                                max(sensorSize.width, sensorSize.height)
+
+                Log.d(
+                        CamerawesomePlugin.TAG,
+                        "Camera $cameraId: sensor size=${sensorSize.width}x${sensorSize.height}mm, " +
+                                "crop factor=$cropFactor, focal length=${focalLengths[0]}mm"
+                )
+
+                // Calculate the 35mm equivalent focal length
+                val equivalentFocalLength = focalLengths[0] * cropFactor
+                Log.d(
+                        CamerawesomePlugin.TAG,
+                        "Camera $cameraId: 35mm equivalent focal length=${equivalentFocalLength}mm"
+                )
+
+                // Determine camera type based on industry standard focal length categories
+                val sensorType =
+                        when {
+                            equivalentFocalLength > 35f ->
+                                    PigeonSensorType.TELEPHOTO // > 35mm is telephoto
+                            equivalentFocalLength >= 24f ->
+                                    PigeonSensorType.WIDEANGLE // 24-35mm is wide-angle
+                            equivalentFocalLength < 24f ->
+                                    PigeonSensorType.ULTRAWIDEANGLE // < 24mm is ultra-wide
+                            else -> PigeonSensorType.WIDEANGLE // Default to wide-angle if we can't
+                        // determine
+                        }
+
+                // Generate a descriptive name based on the sensor type
+                val name =
+                        when (sensorType) {
+                            PigeonSensorType.ULTRAWIDEANGLE ->
+                                    "Ultra-Wide Camera (${equivalentFocalLength.toInt()}mm)"
+                            PigeonSensorType.WIDEANGLE ->
+                                    "Main Camera (${equivalentFocalLength.toInt()}mm)"
+                            PigeonSensorType.TELEPHOTO ->
+                                    "Telephoto Camera (${equivalentFocalLength.toInt()}mm)"
+                            else -> "Camera $cameraId (${equivalentFocalLength.toInt()}mm)"
+                        }
+
+                // Create a PigeonSensorTypeDevice with required fields
+                val sensor =
+                        PigeonSensorTypeDevice(
+                                sensorType = sensorType,
+                                name = name,
+                                iso = 100.0, // Default ISO value
+                                flashAvailable =
+                                        characteristics.get(
+                                                CameraCharacteristics.FLASH_INFO_AVAILABLE
+                                        )
+                                                ?: false,
+                                uid = cameraId // Unique ID for the camera
+                        )
+
+                sensors.add(sensor)
+
+                Log.d(
+                        CamerawesomePlugin.TAG,
+                        "Added camera: id=$cameraId, type=$sensorType, " +
+                                "equivalent focal length=${equivalentFocalLength}mm"
+                )
+            }
+
+            // Add a fallback if no sensors found
+            if (sensors.isEmpty()) {
+                val primaryBackCamera =
+                        cameraIds.firstOrNull { cameraId ->
+                            val characteristics = cameraManager.getCameraCharacteristics(cameraId)
+                            characteristics.get(CameraCharacteristics.LENS_FACING) ==
+                                    CameraCharacteristics.LENS_FACING_BACK
+                        }
+
+                if (primaryBackCamera != null) {
+                    val characteristics = cameraManager.getCameraCharacteristics(primaryBackCamera)
+                    val flashAvailable =
+                            characteristics.get(CameraCharacteristics.FLASH_INFO_AVAILABLE) ?: false
+
+                    val sensor =
+                            PigeonSensorTypeDevice(
+                                    sensorType = PigeonSensorType.WIDEANGLE,
+                                    name = "Main Camera",
+                                    iso = 100.0,
+                                    flashAvailable = flashAvailable,
+                                    uid = primaryBackCamera
+                            )
+
+                    sensors.add(sensor)
+                    Log.d(CamerawesomePlugin.TAG, "Added fallback camera: id=$primaryBackCamera")
+                }
+            }
+        } catch (e: Exception) {
+            Log.e(CamerawesomePlugin.TAG, "Error getting back sensors", e)
+        }
+
+        Log.d(
+                CamerawesomePlugin.TAG,
+                "Detected ${sensors.size} back sensors: ${
+            sensors.joinToString { "${it.name} (${it.sensorType})" }
+        }"
+        )
+
+        // Sort sensors by focal length (ultra-wide first, telephoto last)
+        return sensors.sortedBy {
+            when (it.sensorType) {
+                PigeonSensorType.ULTRAWIDEANGLE -> 0
+                PigeonSensorType.WIDEANGLE -> 1
+                PigeonSensorType.TELEPHOTO -> 2
+                else -> 3
+            }
+        }
+    }
     override fun pauseVideoRecording() {
         cameraState.recordings?.forEach { it.pause() }
     }

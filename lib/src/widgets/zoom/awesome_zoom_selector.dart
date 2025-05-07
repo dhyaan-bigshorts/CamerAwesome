@@ -1,59 +1,110 @@
 import 'package:camerawesome/camerawesome_plugin.dart';
 import 'package:flutter/material.dart';
+import 'package:camerawesome/camerawesome_plugin.dart';
+import 'package:flutter/material.dart';
 
 class AwesomeZoomSelector extends StatefulWidget {
   final CameraState state;
+  final AwesomeTheme? theme;
 
+  /// If you really want to optionally override, otherwise leave null
+  final double? maxWidth;
   const AwesomeZoomSelector({
     super.key,
     required this.state,
+    this.theme,
+    this.maxWidth,
   });
 
   @override
-  State<AwesomeZoomSelector> createState() => _AwesomeZoomSelectorState();
+  _AwesomeZoomSelectorState createState() => _AwesomeZoomSelectorState();
 }
 
 class _AwesomeZoomSelectorState extends State<AwesomeZoomSelector> {
-  double? minZoom;
-  double? maxZoom;
+  double? _minZoom, _maxZoom;
 
   @override
   void initState() {
     super.initState();
-    initAsync();
+    _loadZoomRange();
   }
 
-  initAsync() async {
-    minZoom = await CamerawesomePlugin.getMinZoom();
-    maxZoom = await CamerawesomePlugin.getMaxZoom();
+  Future<void> _loadZoomRange() async {
+    _minZoom = await CamerawesomePlugin.getMinZoom();
+    _maxZoom = await CamerawesomePlugin.getMaxZoom();
+    if (mounted) setState(() {});
   }
 
   @override
   Widget build(BuildContext context) {
-    return StreamBuilder<SensorConfig>(
-      stream: widget.state.sensorConfig$,
-      builder: (context, sensorConfigSnapshot) {
-        initAsync();
-        if (sensorConfigSnapshot.data == null ||
-            minZoom == null ||
-            maxZoom == null) {
-          return const SizedBox.shrink();
-        }
+    if (_minZoom == null || _maxZoom == null) return const SizedBox.shrink();
+    final theme = widget.theme ?? AwesomeThemeProvider.of(context).theme;
 
-        return StreamBuilder<double>(
-          stream: sensorConfigSnapshot.requireData.zoom$,
-          builder: (context, snapshot) {
-            if (snapshot.hasData) {
-              return _ZoomIndicatorLayout(
-                zoom: snapshot.requireData,
-                min: minZoom!,
-                max: maxZoom!,
-                sensorConfig: widget.state.sensorConfig,
-              );
-            } else {
-              return const SizedBox.shrink();
-            }
-          },
+    // four candidate zoom levels
+    const candidateLevels = [0.5, 1.0, 2.0, 4.0, 8.0];
+
+    return StreamBuilder<double>(
+      stream: widget.state.sensorConfig.zoom$,
+      builder: (_, zoomSnap) {
+        if (!zoomSnap.hasData) return const SizedBox.shrink();
+        final currentNorm = zoomSnap.data!;
+        // actual zoom factor
+        final displayZoom = _minZoom! + currentNorm * (_maxZoom! - _minZoom!);
+
+        // your fixed zoom‐level buttons
+        const candidateLevels = [0.5, 1.0, 2.0, 4.0];
+        final zoomLevels = candidateLevels
+            .where((t) => t >= _minZoom! && t <= _maxZoom!)
+            .toList();
+
+        // pick the “selected” level = the greatest one <= displayZoom
+        final selectedLevel = zoomLevels.lastWhere(
+          (t) => displayZoom >= t,
+          orElse: () => zoomLevels.first,
+        );
+
+        return Center(
+          child: Container(
+            padding: const EdgeInsets.symmetric(vertical: 8, horizontal: 12),
+            decoration: BoxDecoration(
+              color: theme.buttonTheme.backgroundColor,
+              borderRadius: BorderRadius.circular(24),
+            ),
+            child: Row(
+              mainAxisSize: MainAxisSize.min,
+              children: zoomLevels.map((target) {
+                final norm = (target - _minZoom!) / (_maxZoom! - _minZoom!);
+                final isSelected = target == selectedLevel;
+
+                // if this is the “selected” button, show live zoom
+                final label = isSelected
+                    ? "${displayZoom.toStringAsFixed(1)}×"
+                    : "$target×";
+
+                return GestureDetector(
+                  onTap: () => widget.state.sensorConfig.setZoom(norm),
+                  child: Container(
+                    width: 48,
+                    height: 32,
+                    margin: const EdgeInsets.symmetric(horizontal: 6),
+                    alignment: Alignment.center,
+                    decoration: BoxDecoration(
+                      color: isSelected ? Colors.white24 : Colors.transparent,
+                      borderRadius: BorderRadius.circular(16),
+                    ),
+                    child: Text(
+                      label,
+                      style: TextStyle(
+                        color: isSelected ? Colors.white : Colors.white70,
+                        fontWeight:
+                            isSelected ? FontWeight.bold : FontWeight.normal,
+                      ),
+                    ),
+                  ),
+                );
+              }).toList(),
+            ),
+          ),
         );
       },
     );

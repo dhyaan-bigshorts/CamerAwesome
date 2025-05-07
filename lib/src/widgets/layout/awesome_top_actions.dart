@@ -1,3 +1,4 @@
+import 'package:camerawesome/camerawesome_plugin.dart';
 import 'package:camerawesome/src/orchestrator/states/states.dart';
 import 'package:camerawesome/src/widgets/buttons/awesome_aspect_ratio_button.dart';
 import 'package:camerawesome/src/widgets/buttons/awesome_flash_button.dart';
@@ -9,13 +10,15 @@ class AwesomeTopActions extends StatelessWidget {
 
   /// Show only children that are relevant to the current [state]
   final List<Widget> children;
+  final List<Widget>? ultraWide;
   final EdgeInsets padding;
 
   AwesomeTopActions({
     super.key,
     required this.state,
+    this.ultraWide,
     List<Widget>? children,
-    this.padding = const EdgeInsets.only(left: 30, right: 30, top: 16),
+    this.padding = const EdgeInsets.only(left: 30, right: 30, top: 5),
   }) : children = children ??
             (state is VideoRecordingCameraState
                 ? [const SizedBox.shrink()]
@@ -31,9 +34,28 @@ class AwesomeTopActions extends StatelessWidget {
   Widget build(BuildContext context) {
     return Padding(
       padding: padding,
-      child: Row(
-        mainAxisAlignment: MainAxisAlignment.spaceBetween,
-        children: children,
+      child: Column(
+        children: [
+          Row(
+            mainAxisAlignment: MainAxisAlignment.spaceBetween,
+            children: children,
+          ),
+          Padding(
+              padding: padding,
+              child: Row(
+                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                  children: [
+                    if (state is VideoCameraState &&
+                        state.sensorConfig.sensors.first.position ==
+                            SensorPosition.back)
+                      AwesomeFlashButton(state: state),
+                    const AwesomeCircleWidget(
+                        child: Icon(
+                      Icons.repeat,
+                    )),
+                    ...?ultraWide,
+                  ]))
+        ],
       ),
     );
   }

@@ -12,6 +12,7 @@ class AwesomeFlashButton extends StatelessWidget {
   final AwesomeTheme? theme;
   final Widget Function(FlashMode) iconBuilder;
   final void Function(SensorConfig, FlashMode) onFlashTap;
+  final bool enableFlashOnForVideo;
 
   AwesomeFlashButton({
     super.key,
@@ -19,6 +20,7 @@ class AwesomeFlashButton extends StatelessWidget {
     this.theme,
     Widget Function(FlashMode)? iconBuilder,
     void Function(SensorConfig, FlashMode)? onFlashTap,
+    this.enableFlashOnForVideo = false,
   })  : iconBuilder = iconBuilder ??
             ((flashMode) {
               final IconData icon;
@@ -61,16 +63,46 @@ class AwesomeFlashButton extends StatelessWidget {
               return const SizedBox.shrink();
             }
 
+            // Skip the button if we're in video mode and flash on is disabled for video
+            ;
+            if (!enableFlashOnForVideo &&
+                snapshot.requireData == FlashMode.on) {
+              return const SizedBox.shrink();
+            }
+
             return AwesomeOrientedWidget(
               rotateWithDevice: theme.buttonTheme.rotateWithCamera,
               child: theme.buttonTheme.buttonBuilder(
                 iconBuilder(snapshot.requireData),
-                () => onFlashTap(sensorConfig, snapshot.requireData),
+                () {
+                  // If video mode and flash is disabled for video, skip FlashMode.on
+                  if (!enableFlashOnForVideo) {
+                    final nextFlash =
+                        _getNextFlashWithoutOn(snapshot.requireData);
+                    sensorConfig.setFlashMode(nextFlash);
+                  } else {
+                    onFlashTap(sensorConfig, snapshot.requireData);
+                  }
+                },
               ),
             );
           },
         );
       },
     );
+  }
+
+  // Helper method to get the next flash mode, skipping FlashMode.on when in video mode
+  FlashMode _getNextFlashWithoutOn(FlashMode current) {
+    switch (current) {
+      case FlashMode.none:
+        return FlashMode.auto;
+      case FlashMode.auto:
+        return FlashMode.always;
+      case FlashMode.always:
+        return FlashMode.none;
+      case FlashMode.on:
+        return FlashMode.auto; // Skip to auto if somehow on FlashMode.on
+    }
   }
 }

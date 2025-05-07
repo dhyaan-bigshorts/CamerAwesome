@@ -93,6 +93,7 @@ class SensorConfig {
       throw "Zoom value must be between 0 and 1";
     }
     await CamerawesomePlugin.setZoom(zoom);
+
     if (!_zoomController.isClosed) {
       _zoomController.sink.add(zoom);
     }

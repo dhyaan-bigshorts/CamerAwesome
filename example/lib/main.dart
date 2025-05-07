@@ -1,3 +1,6 @@
+import 'package:camera_app/new_to_keep/delete_confimation.dart';
+import 'package:camerawesome/src/widgets/buttons/timer_controller.dart';
+import 'package:camera_app/new_to_keep/video_progress_indicator.dart';
 import 'package:camerawesome/camerawesome_plugin.dart';
 import 'package:camerawesome/pigeon.dart';
 import 'package:flutter/foundation.dart';
@@ -5,13 +8,22 @@ import 'package:flutter/material.dart';
 import 'package:image_gallery_saver_plus/image_gallery_saver_plus.dart';
 import 'dart:io';
 import 'package:video_player/video_player.dart';
+import 'package:sizer/sizer.dart';
+
+import 'new_to_keep/app_config.dart';
 
 // Constants for consistent aspect ratio
 const kPreferredAspectRatio = CameraAspectRatios.ratio_16_9;
 const kPreferredAspectRatioValue = 16.0 / 9.0;
 
 void main() {
-  runApp(const CameraAwesomeApp());
+  runApp(
+    Sizer(
+      builder: (context, orientation, deviceType) {
+        return MaterialApp(home: const CameraAwesomeApp());
+      },
+    ),
+  );
 }
 
 class CameraAwesomeApp extends StatelessWidget {
@@ -42,145 +54,458 @@ class _CameraPageState extends State<CameraPage> {
   final List<String> _recordedVideos = [];
   bool _justRecorded = false;
 
+  List<int> _preselectedVideoDurations = [30, 45, 60, 120];
+
+  int _selectedDurationInSeconds = 120; // default 2 minutes
+
+  bool _usingUltra = false;
+  bool _hasUltraWide = false; // Track if device has ultra-wide capability
+  final _cameraApi = CameraInterface();
+
+  late TimerController _timerController;
+
+  @override
+  void initState() {
+    super.initState();
+    _checkUltraWideSupport();
+    _timerController = TimerController(
+      themeApp: AwesomeTheme(bottomActionsBackgroundColor: Colors.transparent),
+      onTimerComplete: _handleTimerComplete,
+      onTimerStateChanged: () {
+        // Refresh UI when timer state changes
+        if (mounted) setState(() {});
+      },
+    );
+  }
+
+  // Check if the device has ultra-wide camera support
+  Future<void> _checkUltraWideSupport() async {
+    try {
+      final sensors = await _cameraApi.getBackSensors();
+      final hasUltraWide = sensors.any(
+          (sensor) => sensor?.sensorType == PigeonSensorType.ultraWideAngle);
+
+      if (mounted) {
+        setState(() {
+          _hasUltraWide = hasUltraWide;
+        });
+      }
+
+      if (!hasUltraWide && mounted) {
+        // ScaffoldMessenger.of(context).showSnackBar(
+        //   const SnackBar(
+        //     content: Text('Ultra-wide camera not available on this device'),
+        //     duration: Duration(seconds: 3),
+        //   ),
+        // );
+      }
+
+      debugPrint('Ultra-wide camera available: $_hasUltraWide');
+    } catch (e) {
+      debugPrint('Error checking camera sensors: $e');
+    }
+  }
+
+  // 1. State variable to track durations
+  final List<Duration> _recordedVideosDurations = [];
+
+  Future<Duration> getVideoDuration(String path) async {
+    try {
+      final controller = VideoPlayerController.file(File(path));
+      await controller.initialize();
+      final duration = controller.value.duration;
+      await controller.dispose();
+      return duration;
+    } catch (e) {
+      debugPrint('Error getting video duration: $e');
+      return Duration.zero;
+    }
+  }
+
+  bool _showDeleteConfirmation = false;
+  bool noMoreRecordings = false;
   @override
   Widget build(BuildContext context) {
-    return Scaffold(
-      body: CameraAwesomeBuilder.awesome(
-        theme: AwesomeTheme(bottomActionsBackgroundColor: Colors.transparent),
-        saveConfig: SaveConfig.video(
-          videoOptions: VideoOptions(
-            enableAudio: true,
-            ios: CupertinoVideoOptions(
-              fps: 30,
-              codec: CupertinoCodecType.h264,
-            ),
-            android: AndroidVideoOptions(
-              bitrate: 1200000,
-              fallbackStrategy: QualityFallbackStrategy.lower,
-            ),
-            quality: VideoRecordingQuality.fhd,
-          ),
-          mirrorFrontCamera: true,
-        ),
-        sensorConfig: SensorConfig.single(
-          sensor: Sensor.position(SensorPosition.back),
-          flashMode: FlashMode.auto,
-          aspectRatio: kPreferredAspectRatio,
-          zoom: 0.0,
-        ),
-        enablePhysicalButton: true,
-        onMediaCaptureEvent: (event) {
-          // Only handle video events
-          if (!event.isVideo) return;
-
-          switch (event.status) {
-            case MediaCaptureStatus.capturing:
-              // Reset the justRecorded flag when starting a new recording
-              if (mounted) {
-                setState(() => _justRecorded = false);
-              }
-              break;
-            case MediaCaptureStatus.success:
-              event.captureRequest.when(
-                single: (single) {
-                  final videoPath = single.file?.path;
-                  if (videoPath != null && mounted) {
-                    setState(() {
-                      _recordedVideos.add(videoPath);
-                      _justRecorded = true;
-                    });
-                  }
-                },
-                multiple: (multiple) {
-                  multiple.fileBySensor.forEach((key, value) {
-                    final path = value?.path;
-                    if (path != null && mounted) {
-                      setState(() {
-                        _recordedVideos.add(path);
-                      });
-                    }
-                  });
-
-                  if (mounted) {
-                    setState(() => _justRecorded = true);
-                  }
-                },
-              );
-              break;
-            case MediaCaptureStatus.failure:
-              break;
-          }
-        },
-        onMediaTap: (media) {
-          // Handle media tap if needed
-        },
-        // Use custom layout builders to provide the reset functionality
-        middleContentBuilder: (state) {
-          return Column(
-            children: [
-              const Spacer(),
-              // Add reset button before zoom controls
-
-              if (state is PhotoCameraState && state.hasFilters)
-                AwesomeFilterWidget(state: state)
-              else if (!kIsWeb && Platform.isAndroid)
-                AwesomeZoomSelector(state: state),
-              AwesomeCameraModeSelector(state: state),
-              if (_recordedVideos.isNotEmpty)
-                Padding(
-                  padding: const EdgeInsets.only(bottom: 16.0),
-                  child: IconButton(
-                    icon: const Icon(
-                      Icons.backspace, // ← use the backspace icon
-                      color: Colors.white,
-                    ),
-                    tooltip: 'Delete last video',
-                    onPressed: _deleteLastVideo,
-                  ),
+    AppConfig _appConfig = AppConfig(context);
+    return Stack(
+      children: [
+        Scaffold(
+          body: CameraAwesomeBuilder.awesome(
+            theme:
+                AwesomeTheme(bottomActionsBackgroundColor: Colors.transparent),
+            saveConfig: SaveConfig.video(
+              videoOptions: VideoOptions(
+                enableAudio: true,
+                ios: CupertinoVideoOptions(
+                  fps: 30,
+                  codec: CupertinoCodecType.h264,
                 ),
-            ],
-          );
-        },
-        bottomActionsBuilder: (state) {
-          // For recording state, we don't show the Next button
-          if (state is VideoRecordingCameraState) {
-            return AwesomeBottomActions(
-              state: state,
-            );
-          }
+                android: AndroidVideoOptions(
+                  bitrate: 1200000,
+                  fallbackStrategy: QualityFallbackStrategy.lower,
+                ),
+                quality: VideoRecordingQuality.fhd,
+              ),
+              mirrorFrontCamera: true,
+            ),
+            sensorConfig: SensorConfig.single(
+              sensor: Sensor.position(
+                SensorPosition.back,
+              ),
+              flashMode: FlashMode.auto,
+              aspectRatio: kPreferredAspectRatio,
+              zoom: 0.0,
+            ),
 
-          return Column(
-            mainAxisAlignment: MainAxisAlignment.end,
-            children: [
-              AwesomeBottomActions(
+            enablePhysicalButton: true,
+            onMediaCaptureEvent: (event) {
+              // Only handle video events
+              if (!event.isVideo) return;
+
+              switch (event.status) {
+                case MediaCaptureStatus.capturing:
+                  // Reset the justRecorded flag when starting a new recording
+                  if (mounted) {
+                    setState(() => _justRecorded = false);
+                  }
+                  break;
+                case MediaCaptureStatus.success:
+                  event.captureRequest.when(
+                    single: (single) async {
+                      final videoPath = single.file?.path;
+                      if (videoPath != null && mounted) {
+                        // Get actual duration from video file
+                        final duration = await getVideoDuration(videoPath);
+
+                        setState(() {
+                          _recordedVideos.add(videoPath);
+                          _recordedVideosDurations.add(duration);
+                          _justRecorded = true;
+                        });
+                      }
+                    },
+                    multiple: (multiple) {
+                      multiple.fileBySensor.forEach((key, value) {
+                        final path = value?.path;
+                        if (path != null && mounted) {
+                          setState(() {
+                            _recordedVideos.add(path);
+                          });
+                        }
+                      });
+
+                      if (mounted) {
+                        setState(() => _justRecorded = true);
+                      }
+                    },
+                  );
+                  break;
+                case MediaCaptureStatus.failure:
+                  break;
+              }
+            },
+            onMediaTap: (media) {
+              // Handle media tap if needed
+            },
+
+            topActionsBuilder: (state) {
+              // Get the current sensor position using the correct property path
+
+              return AwesomeTopActions(
                 state: state,
-                right: (_justRecorded)
-                    ? Padding(
-                        padding: const EdgeInsets.only(bottom: 16.0),
-                        child: ElevatedButton(
-                          onPressed: _navigateToGallery,
-                          style: ElevatedButton.styleFrom(
-                            backgroundColor: Colors.blue,
-                            padding: const EdgeInsets.symmetric(
-                                horizontal: 24, vertical: 12),
+                padding: EdgeInsets.only(
+                    left: AppConfig(context).deviceWidth(2),
+                    top: AppConfig(context).deviceHeight(1),
+                    right: AppConfig(context).deviceWidth(2)),
+                children: [
+                  VideoRecordingProgress(
+                    state: state is VideoRecordingCameraState ? state : null,
+                    previousRecordingsDurations: _recordedVideosDurations,
+                    maxDuration: _selectedDurationInSeconds / 60.0,
+                    stop: () {
+                      if (state is VideoRecordingCameraState) {
+                        state.stopRecording();
+                        setState(() {
+                          noMoreRecordings = true;
+                        });
+                      }
+                    },
+                  ),
+                ],
+                ultraWide: [
+                  Visibility(
+                    visible: _hasUltraWide,
+                    child: IconButton(
+                      icon: Icon(
+                        Icons.filter_center_focus,
+                        color: _usingUltra ? Colors.amber : Colors.white,
+                      ),
+                      tooltip: _usingUltra ? 'Ultra-wide on' : 'Ultra-wide off',
+                      onPressed: () {
+                        // flip your boolean
+                        setState(() => _usingUltra = !_usingUltra);
+                        // now call into the native side with the new sensor list
+                        _cameraApi.setSensor(
+                          _usingUltra
+                              ? [
+                                  PigeonSensor(
+                                      type: PigeonSensorType.ultraWideAngle,
+                                      position: PigeonSensorPosition.back)
+                                ]
+                              : [
+                                  PigeonSensor(
+                                      type: PigeonSensorType.wideAngle,
+                                      position: PigeonSensorPosition.back)
+                                ],
+                        );
+                      },
+                    ),
+                  ),
+                  Visibility(
+                    visible:
+                        _recordedVideos.isEmpty && state is VideoCameraState,
+                    child: Center(
+                      child: GestureDetector(
+                        onTap: () {
+                          setState(() {
+                            final currentIndex = _preselectedVideoDurations
+                                .indexOf(_selectedDurationInSeconds);
+                            final nextIndex = (currentIndex + 1) %
+                                _preselectedVideoDurations.length;
+                            _selectedDurationInSeconds =
+                                _preselectedVideoDurations[nextIndex];
+                          });
+                        },
+                        child: Container(
+                          width: _appConfig.deviceWidth(15),
+                          height: _appConfig.deviceHeight(5),
+                          alignment: Alignment.center,
+                          padding: const EdgeInsets.symmetric(
+                              horizontal: 4, vertical: 8),
+                          decoration: BoxDecoration(
+                            color: Colors.black12,
+                            borderRadius: BorderRadius.circular(4),
                           ),
-                          child: const Text(
-                            'Next',
-                            style: TextStyle(
-                              fontSize: 16,
-                              fontWeight: FontWeight.bold,
+                          child: Text(
+                            _selectedDurationInSeconds >= 60
+                                ? "${_selectedDurationInSeconds ~/ 60} min"
+                                : "${_selectedDurationInSeconds} sec",
+                            style: const TextStyle(
                               color: Colors.white,
+                              fontWeight: FontWeight.bold,
                             ),
                           ),
                         ),
-                      )
-                    : null,
-              ),
-            ],
-          );
-        },
-      ),
+                      ),
+                    ),
+                  ),
+                  if (state is VideoCameraState)
+                    _timerController.buildElegantTimerSelector(context)
+                ],
+              );
+            },
+
+            // Use custom layout builders to provide the reset functionality
+            middleContentBuilder: (state) {
+              return Column(
+                mainAxisSize: MainAxisSize.max,
+                mainAxisAlignment: MainAxisAlignment.end,
+                crossAxisAlignment: CrossAxisAlignment.stretch,
+                children: [
+                  if (state is PhotoCameraState && state.hasFilters)
+                    AwesomeFilterWidget(state: state)
+                  else if (!kIsWeb && Platform.isAndroid)
+                    AwesomeZoomSelector(
+                      state: state,
+                      theme: AwesomeTheme(
+                        bottomActionsBackgroundColor: Colors.transparent,
+                      ),
+                    ),
+
+                  // always reserve the same space, but only show the IconButton when needed
+
+                  Visibility(
+                    visible: _recordedVideos.isNotEmpty,
+                    child: Padding(
+                      padding: const EdgeInsets.only(top: 16.0, bottom: 16.0),
+                      child: IconButton(
+                        icon: const Icon(Icons.backspace, color: Colors.white),
+                        tooltip: 'Delete last video',
+                        onPressed: _showDeleteConfirmationDialog,
+                      ),
+                    ),
+                  ),
+                ],
+              );
+            },
+
+            bottomActionsBuilder: (state) {
+              // For recording state, we don't show the Next button
+              if (state is VideoRecordingCameraState) {
+                return Column(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    AwesomeBottomActions(
+                      state: state,
+                    ),
+                  ],
+                );
+              }
+
+              return Column(
+                mainAxisAlignment: MainAxisAlignment.end,
+                children: [
+                  AwesomeBottomActions(
+                    state: state,
+                    captureButton: ProductionCaptureButton(
+                      state: state,
+                      timerController: _timerController,
+                      onTap: () {
+                        if (!noMoreRecordings) {
+                          if (state is VideoRecordingCameraState) {
+                            // Already recording, stop recording
+                            state.stopRecording();
+                          } else if (!_timerController.isTimerActive) {
+                            // Not recording and timer not active, start timer or record
+                            _timerController.startTimerCountdown(state);
+                          } else {
+                            // Timer is active, cancel it
+                            _timerController.cancelTimer();
+                          }
+                        } else {
+                          ScaffoldMessenger.of(context).showSnackBar(
+                            const SnackBar(
+                              content: Text(
+                                  'Max duration allowed while recording has been reached'),
+                              duration: Duration(seconds: 2),
+                            ),
+                          );
+                        }
+                      },
+                    ),
+                    right: (_justRecorded)
+                        ? Padding(
+                            padding: const EdgeInsets.only(bottom: 16.0),
+                            child: ElevatedButton(
+                              onPressed: _navigateToGallery,
+                              style: ElevatedButton.styleFrom(
+                                backgroundColor: Colors.white,
+                                padding: const EdgeInsets.symmetric(
+                                    horizontal: 24, vertical: 12),
+                              ),
+                              child: const Text(
+                                'Next',
+                                style: TextStyle(
+                                  fontSize: 16,
+                                  fontWeight: FontWeight.bold,
+                                  color: Colors.black,
+                                ),
+                              ),
+                            ),
+                          )
+                        : Padding(
+                            padding: const EdgeInsets.only(bottom: 16.0),
+                            child: ElevatedButton(
+                              onPressed: null, // ← null disables it
+                              style: ElevatedButton.styleFrom(
+                                backgroundColor: Colors
+                                    .blue, // enabled color (ignored when disabled)
+                                disabledBackgroundColor: Colors.white
+                                    .withOpacity(0.4), // what you actually see
+                                disabledForegroundColor: Colors
+                                    .black, // text/icon color when disabled
+                                padding: const EdgeInsets.symmetric(
+                                  horizontal: 24,
+                                  vertical: 12,
+                                ),
+                              ),
+                              child: const Text(
+                                'Next',
+                                style: TextStyle(
+                                  fontSize: 16,
+                                  fontWeight: FontWeight.bold,
+                                  // color here is overridden by disabledForegroundColor
+                                ),
+                              ),
+                            ),
+                          ),
+                  ),
+                ],
+              );
+            },
+          ),
+        ), // The overlay - when showing it completely blocks interaction with anything underneath
+        if (_showDeleteConfirmation && _recordedVideos.isNotEmpty)
+          DeleteConfirmationOverlay(
+            // videoPath: _recordedVideos.last,
+            onConfirm: _deleteLastVideo,
+            onCancel: _cancelDelete,
+          ),
+
+        if (_timerController.isTimerActive)
+          Scaffold(
+              backgroundColor: Colors.transparent,
+              body: Center(
+                child: Container(
+                  height: 150,
+                  width: 150,
+                  decoration: BoxDecoration(
+                    color: Colors.black54,
+                    borderRadius: BorderRadius.circular(20),
+                  ),
+                  child: Center(
+                    child: Text(
+                      '${_timerController.currentTimerSeconds}',
+                      style: const TextStyle(
+                        color: Colors.white,
+                        fontSize: 80,
+                        fontWeight: FontWeight.bold,
+                      ),
+                    ),
+                  ),
+                ),
+              )),
+      ],
     );
+  }
+
+  void dispose() {
+    _timerController.dispose();
+    super.dispose();
+  }
+
+  void _handleTimerComplete(CameraState state) {
+    // Use the same pattern as in AwesomeCaptureButton
+    state.when(
+      onPhotoMode: (photoState) => photoState.takePhoto(),
+      onVideoMode: (videoState) {
+        videoState.startRecording();
+        _timerController.cancelTimer();
+      },
+      onVideoRecordingMode: (videoState) {
+        // Already recording, do nothing
+      },
+      onPreparingCamera: (preparingState) {
+        // Camera not ready
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: Text('Camera is not ready yet'),
+            duration: Duration(seconds: 2),
+          ),
+        );
+      },
+    );
+  }
+
+  // Show confirmation dialog
+  void _showDeleteConfirmationDialog() {
+    if (_recordedVideos.isEmpty) return;
+    setState(() => _showDeleteConfirmation = true);
+  }
+
+// Cancel deletion
+  void _cancelDelete() {
+    setState(() => _showDeleteConfirmation = false);
   }
 
   // Function to delete the last recorded video
@@ -192,10 +517,16 @@ class _CameraPageState extends State<CameraPage> {
       setState(() {
         _recordedVideos.removeLast();
 
+        if (_recordedVideosDurations.isNotEmpty) {
+          _recordedVideosDurations.removeLast();
+        }
+        noMoreRecordings = false;
+
         // If no videos left, reset the flag
         if (_recordedVideos.isEmpty) {
           _justRecorded = false;
         }
+        _showDeleteConfirmation = false;
       });
 
       // Attempt to delete the file from storage
@@ -415,6 +746,7 @@ class _VideoPlayerPageState extends State<VideoPlayerPage>
   @override
   void dispose() {
     _isDisposed = true;
+
     WidgetsBinding.instance.removeObserver(this);
 
     // Clean up the controller when the widget is disposed

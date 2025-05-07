@@ -21,7 +21,7 @@ class AwesomeCameraSwitchButton extends StatelessWidget {
             (() {
               return AwesomeCircleWidget.icon(
                 theme: theme,
-                icon: Icons.cameraswitch,
+                icon: Icons.repeat,
                 scale: scale,
               );
             }),

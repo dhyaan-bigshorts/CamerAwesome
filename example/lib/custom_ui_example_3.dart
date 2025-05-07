@@ -52,7 +52,7 @@ class RecordVideoUI extends StatelessWidget {
           padding: const EdgeInsets.only(bottom: 20, left: 20, right: 20),
           child: Row(
             children: [
-              AwesomeCaptureButton(state: state),
+              // AwesomeCaptureButton(state: state),
               const Spacer(),
               StreamBuilder(
                 stream: state.captureState$,
