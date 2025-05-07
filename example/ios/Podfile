@@ -36,6 +36,8 @@ target 'Runner' do
   end
   
   flutter_install_all_ios_pods File.dirname(File.realpath(__FILE__))
+  pod 'ffmpeg-kit-ios-audio',
+    :path => File.expand_path('../Frameworks/ffmpeg-kit-ios-audio', __FILE__)
 end
 
 post_install do |installer|

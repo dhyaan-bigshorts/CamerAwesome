@@ -19,3 +19,7 @@ android/gradlew
 android/gradlew.bat
 android/gradle/wrapper/gradle-wrapper.jar
 example/android/app/.cxx/** 
+example/android/app/repo/smart-exception-common-0.2.1.jar
+example/android/app/repo/smart-exception-java-0.2.1.jar
+
+example/ios/Frameworks/

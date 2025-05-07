@@ -1,6 +1,13 @@
 PODS:
   - camerawesome (0.0.1):
     - Flutter
+  - ffmpeg-kit-ios-audio (6.0)
+  - ffmpeg_kit_flutter_audio (6.0.3):
+    - ffmpeg_kit_flutter_audio/audio (= 6.0.3)
+    - Flutter
+  - ffmpeg_kit_flutter_audio/audio (6.0.3):
+    - ffmpeg-kit-ios-audio (= 6.0)
+    - Flutter
   - Flutter (1.0.0)
   - google_mlkit_barcode_scanning (0.14.1):
     - Flutter
@@ -92,6 +99,8 @@ PODS:
 
 DEPENDENCIES:
   - camerawesome (from `.symlinks/plugins/camerawesome/ios`)
+  - ffmpeg-kit-ios-audio (from `/Users/apple/Downloads/GitHub/CamerAwesome/example/ios/Frameworks/ffmpeg-kit-ios-audio`)
+  - ffmpeg_kit_flutter_audio (from `.symlinks/plugins/ffmpeg_kit_flutter_audio/ios`)
   - Flutter (from `Flutter`)
   - google_mlkit_barcode_scanning (from `.symlinks/plugins/google_mlkit_barcode_scanning/ios`)
   - google_mlkit_commons (from `.symlinks/plugins/google_mlkit_commons/ios`)
@@ -122,6 +131,10 @@ SPEC REPOS:
 EXTERNAL SOURCES:
   camerawesome:
     :path: ".symlinks/plugins/camerawesome/ios"
+  ffmpeg-kit-ios-audio:
+    :path: "/Users/apple/Downloads/GitHub/CamerAwesome/example/ios/Frameworks/ffmpeg-kit-ios-audio"
+  ffmpeg_kit_flutter_audio:
+    :path: ".symlinks/plugins/ffmpeg_kit_flutter_audio/ios"
   Flutter:
     :path: Flutter
   google_mlkit_barcode_scanning:
@@ -143,6 +156,8 @@ EXTERNAL SOURCES:
 
 SPEC CHECKSUMS:
   camerawesome: a961fa32dafc00d2f093d824311c84f849586b58
+  ffmpeg-kit-ios-audio: 999c896e4947ce2e76ad52a49399fa7d587b2369
+  ffmpeg_kit_flutter_audio: bd461be2262798d0d1b3cd7d1a6f8b64f09add65
   Flutter: e0871f40cf51350855a761d2e70bf5af5b9b5de7
   google_mlkit_barcode_scanning: 8f5987f244a43fe1167689c548342a5174108159
   google_mlkit_commons: 2abe6a70e1824e431d16a51085cb475b672c8aab
@@ -167,6 +182,6 @@ SPEC CHECKSUMS:
   PromisesObjC: f5707f49cb48b9636751c5b2e7d227e43fba9f47
   video_player_avfoundation: 2cef49524dd1f16c5300b9cd6efd9611ce03639b
 
-PODFILE CHECKSUM: dabefdfdd2f64e884a9feb5996b51b7bfc7404d3
+PODFILE CHECKSUM: 94e20e3a5a5daa872cb8a07f496a874d875752bc
 
 COCOAPODS: 1.16.2

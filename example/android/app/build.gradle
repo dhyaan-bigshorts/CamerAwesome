@@ -46,6 +46,13 @@ flutter {
 }
 
 dependencies {
+    configurations.implementation {
+        exclude group:'com.arthenica', module:'ffmpeg-kit-audio'   // block remote
+        exclude group:'com.arthenica', module:'ffmpeg-kit-https'   // block fallback
+    }
+    implementation files('repo/smart-exception-common-0.2.1.jar') 
+    implementation files('repo/smart-exception-java-0.2.1.jar')
+    implementation 'com.local.ffmpeg-kit:audio_binary:6.0'
     implementation "org.jetbrains.kotlin:kotlin-stdlib:1.8.10"
     implementation 'com.google.mlkit:face-detection:16.1.5'
     implementation 'com.google.mlkit:vision-common:17.3.0'

@@ -162,7 +162,7 @@ class _CameraPageState extends State<CameraPage> {
               videoOptions: VideoOptions(
                 enableAudio: true,
                 ios: CupertinoVideoOptions(
-                  fps: 30,
+                  fps: 60,
                   codec: CupertinoCodecType.h264,
                 ),
                 android: AndroidVideoOptions(

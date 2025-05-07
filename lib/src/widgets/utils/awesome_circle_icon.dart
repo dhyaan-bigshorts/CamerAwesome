@@ -30,7 +30,7 @@ class AwesomeCircleWidget extends StatelessWidget {
     final buttonTheme = theme.buttonTheme;
     return Material(
       shape: buttonTheme.shape,
-      color: buttonTheme.backgroundColor,
+      color: Colors.black12,
       child: Padding(
         padding: buttonTheme.padding * scale,
         child: child ??
