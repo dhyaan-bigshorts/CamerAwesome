@@ -38,9 +38,8 @@ class AwesomeFlashButton extends StatelessWidget {
                   icon = Icons.flashlight_on;
                   break;
               }
-              return AwesomeCircleWidget.icon(
-                icon: icon,
-                theme: theme,
+              return Icon(
+                icon,
               );
             }),
         onFlashTap = onFlashTap ??

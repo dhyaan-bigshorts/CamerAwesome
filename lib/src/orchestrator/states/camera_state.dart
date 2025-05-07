@@ -62,44 +62,71 @@ abstract class CameraState {
     FlashMode? flash,
     SensorType? type,
   }) async {
-    final previous = cameraContext.sensorConfig;
+    try {
+      // Get current configuration
+      final previous = cameraContext.sensorConfig;
+      SensorConfig next;
 
-    SensorConfig next;
-    if (previous.sensors.length <= 1) {
-      next = SensorConfig.single(
-        sensor: previous.sensors.first.position == SensorPosition.back
-            ? Sensor.position(SensorPosition.front)
-            : Sensor.position(SensorPosition.back),
-        // TODO Initial values are not set in native when set like this
-        aspectRatio: aspectRatio ?? CameraAspectRatios.ratio_4_3,
-        zoom: zoom ?? 0.0,
-        flashMode: flash ?? FlashMode.none,
-      );
-    } else {
-      // switch all camera position in array by one like this:
-      // old: [front, telephoto, wide]
-      // new : [wide, front, telephoto]
-      final newSensorsCopy = [...previous.sensors.nonNulls];
-      next = SensorConfig.multiple(
-        sensors: newSensorsCopy
-          ..insert(0, newSensorsCopy.removeAt(newSensorsCopy.length - 1)),
-        // TODO Initial values are not set in native when set like this
-        aspectRatio: aspectRatio ?? CameraAspectRatios.ratio_4_3,
-        zoom: zoom ?? 0.0,
-        flashMode: flash ?? FlashMode.none,
-      );
-    }
-    await cameraContext.setSensorConfig(next);
+      // Create new configuration
+      if (previous.sensors.length <= 1) {
+        next = SensorConfig.single(
+          sensor: previous.sensors.first.position == SensorPosition.back
+              ? Sensor.position(SensorPosition.front)
+              : Sensor.position(SensorPosition.back),
+          aspectRatio: aspectRatio ?? previous.aspectRatio,
+          zoom: zoom ?? previous.zoom,
+          flashMode: flash ?? previous.flashMode,
+        );
+      } else {
+        final newSensorsCopy = [...previous.sensors.nonNulls];
+        next = SensorConfig.multiple(
+          sensors: newSensorsCopy
+            ..insert(0, newSensorsCopy.removeAt(newSensorsCopy.length - 1)),
+          aspectRatio: aspectRatio ?? previous.aspectRatio,
+          zoom: zoom ?? previous.zoom,
+          flashMode: flash ?? previous.flashMode,
+        );
+      }
 
-    // TODO Once initial sensorConfig is correctly handled, we can remove below lines
-    if (aspectRatio != null) {
-      await next.setAspectRatio(aspectRatio);
-    }
-    if (zoom != null) {
-      await next.setZoom(zoom);
-    }
-    if (flash != null) {
-      await next.setFlashMode(flash);
+      // First step: Stop the camera completely
+      // await cameraContext.stopCamera();
+
+      // Wait to ensure camera is fully stopped
+      await Future.delayed(Duration(milliseconds: 300));
+
+      // Set new sensor configuration
+      await cameraContext.setSensorConfig(next);
+
+      // Wait to ensure configuration is applied
+      await Future.delayed(Duration(milliseconds: 200));
+
+      // Start camera with new configuration
+      // await cameraContext.startCamera();
+
+      // Apply specific settings after camera is started if needed
+      if (aspectRatio != null && aspectRatio != previous.aspectRatio) {
+        await next.setAspectRatio(aspectRatio);
+      }
+
+      if (zoom != null && zoom != previous.zoom) {
+        await next.setZoom(zoom);
+      }
+
+      if (flash != null && flash != previous.flashMode) {
+        await next.setFlashMode(flash);
+      }
+    } catch (e, stackTrace) {
+      // Recovery attempt
+      try {
+        // await cameraContext.startCamera();
+      } catch (recoveryError) {
+        // Last resort - try to reinitialize the entire camera
+        try {
+          await cameraContext.dispose();
+          await Future.delayed(Duration(milliseconds: 500));
+          // await cameraContext.initialize();
+        } catch (reinitError) {}
+      }
     }
   }
 

@@ -108,6 +108,8 @@
   PreviewSize *firstPreviewSize = [qualities count] > 0 ? qualities.lastObject : [PreviewSize makeWithWidth:@3840 height:@2160];
   
   CGSize firstSize = CGSizeMake([firstPreviewSize.width floatValue], [firstPreviewSize.height floatValue]);
+  
+  // This call to setCameraPreset must be safe to use inside configuration
   [self setCameraPreset:firstSize];
 }
 
@@ -179,19 +181,9 @@
   // Determine the target size based on the current mode and settings
   if (_captureMode == Video || _videoController.isRecording) {
       // If recording video, prioritize the recording quality setting
-      // TODO: Need a way to get the CGSize from the _recordingQuality enum or _videoOptions
-      // For now, let's assume a helper function or default high quality if direct mapping isn't obvious.
-      // Placeholder: If video options exist, try to use them, otherwise fall back.
-      // If no direct mapping, maybe use the highest available preset suitable for video?
-      // Or just pass CGSizeZero to let selectVideoCapturePreset pick the best for video?
-      // For now, let's pass CGSizeZero to select the best default for video capture.
       if (_videoOptions != nil) {
-         // Hypothetical: Get size from VideoOptions quality. Needs actual implementation.
-         // targetSize = [CameraQualities sizeFromQuality:_recordingQuality];
-         // If no direct mapping, maybe use the highest available preset suitable for video?
-         // Or just pass CGSizeZero to let selectVideoCapturePreset pick the best for video?
-         // For now, let's pass CGSizeZero to select the best default for video capture.
-         targetSize = CGSizeZero; 
+         // Fallback to default for video capture
+         targetSize = CGSizeZero;
       } else if (!CGSizeEqualToSize(currentPreviewSize, CGSizeZero)){
          // Use provided size if valid and no video options
          targetSize = currentPreviewSize;
@@ -200,12 +192,12 @@
          targetSize = CGSizeZero;
       }
   } else if (_imageStreamController.streamImages) {
-      // If only streaming (not recording), force 720p for potential stability (based on commit history)
+      // If only streaming (not recording), force 720p for potential stability
       targetSize = CGSizeMake(720, 1280);
   } else if (CGSizeEqualToSize(currentPreviewSize, CGSizeZero)) {
       // If neither recording nor streaming, and no size provided, use best quality
       targetSize = CGSizeZero;
-  } 
+  }
   // else: Use the non-zero currentPreviewSize passed in.
 
   NSString *presetSelected;
@@ -217,27 +209,17 @@
     presetSelected = [CameraQualities selectVideoCapturePreset:_captureSession device:_captureDevice];
   }
 
-  // Check if the preset needs to be changed
+  // FIXED: Do not start/stop session inside a configuration block
+  // Just set the preset directly
   if (![_captureSession.sessionPreset isEqualToString:presetSelected]) {
-      // Check if the session is running before changing the preset
-      BOOL sessionIsRunning = _captureSession.isRunning;
-      if (sessionIsRunning) {
-          [_captureSession stopRunning];
-      }
-
-      [_captureSession setSessionPreset:presetSelected];
-      _currentPreset = presetSelected;
-
-      if (sessionIsRunning) {
-          [_captureSession startRunning];
-      }
+    [_captureSession setSessionPreset:presetSelected];
+    _currentPreset = presetSelected;
   } else {
-      _currentPreset = _captureSession.sessionPreset;
+    _currentPreset = _captureSession.sessionPreset;
   }
 
-  // Use the corrected method name
+  // Update the current preview size
   _currentPreviewSize = [CameraQualities getSizeForPreset:_currentPreset];
-
   [_videoController setPreviewSize:_currentPreviewSize];
 }
 
@@ -288,7 +270,18 @@
 
 /// Set sensor between Front & Rear camera
 - (void)setSensor:(PigeonSensor *)sensor {
-  // First remove all input & output
+  // Check if session is running before making changes
+  BOOL wasRunning = _captureSession.isRunning;
+  
+  // If running, stop BEFORE beginning configuration
+  if (wasRunning) {
+    [_captureSession stopRunning];
+    
+    // Add a small delay to ensure session is fully stopped
+    [NSThread sleepForTimeInterval:0.1];
+  }
+  
+  // Now it's safe to begin configuration
   [_captureSession beginConfiguration];
   
   // Only remove camera channel but keep audio
@@ -313,7 +306,15 @@
   
   [self setBestPreviewQuality];
   
+  // Commit the configuration
   [_captureSession commitConfiguration];
+  
+  // Restart the session if it was running before
+  if (wasRunning) {
+    // Small delay to ensure configuration is fully applied
+    [NSThread sleepForTimeInterval:0.1];
+    [_captureSession startRunning];
+  }
 }
 
 /// Set zoom level

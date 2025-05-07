@@ -106,7 +106,7 @@ class TimerController {
     return Theme(
       data: theme.copyWith(
         popupMenuTheme: PopupMenuThemeData(
-          elevation: 8,
+          elevation: 0,
           shape: RoundedRectangleBorder(
             borderRadius: BorderRadius.circular(12),
           ),
@@ -114,22 +114,14 @@ class TimerController {
         ),
       ),
       child: Stack(
-        alignment: Alignment.center,
+        alignment: Alignment.topRight,
         children: [
           PopupMenuButton<int>(
-            offset: const Offset(0, 40),
+            offset: const Offset(0, 0),
             tooltip: 'Timer',
             icon: AnimatedContainer(
               duration: const Duration(milliseconds: 200),
-              padding: const EdgeInsets.all(8),
-              decoration: BoxDecoration(
-                shape: BoxShape.circle,
-                color: themeApp?.buttonTheme.backgroundColor,
-                border: Border.all(
-                  color: Colors.transparent,
-                  width: 2,
-                ),
-              ),
+              padding: const EdgeInsets.all(0),
               child: Icon(
                 Icons.timer,
                 color: _selectedTimerDuration > 0 ? Colors.amber : Colors.white,
@@ -148,7 +140,7 @@ class TimerController {
                       color: Colors.transparent,
                     ),
                     padding:
-                        const EdgeInsets.symmetric(vertical: 8, horizontal: 6),
+                        const EdgeInsets.symmetric(vertical: 0, horizontal: 6),
                     child: Row(
                       mainAxisAlignment: MainAxisAlignment.spaceBetween,
                       children: [

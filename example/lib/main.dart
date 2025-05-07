@@ -62,6 +62,31 @@ class _CameraPageState extends State<CameraPage> {
   bool _hasUltraWide = false; // Track if device has ultra-wide capability
   final _cameraApi = CameraInterface();
 
+  bool _audioEnabled = true;
+
+  void _toggleAudio() {
+    setState(() {
+      _audioEnabled = !_audioEnabled;
+    });
+    CamerawesomePlugin.setAudioMode(_audioEnabled).then((_) {
+      // Show feedback to user
+      // ScaffoldMessenger.of(context).showSnackBar(
+      //   SnackBar(
+      //     content: Text(
+      //         _audioEnabled ? 'Microphone enabled' : 'Microphone disabled'),
+      //     duration: const Duration(seconds: 1),
+      //   ),
+      // );
+    }).catchError((error) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text("Error toggling microphone"),
+          duration: const Duration(seconds: 1),
+        ),
+      );
+    });
+  }
+
   late TimerController _timerController;
 
   @override
@@ -146,7 +171,7 @@ class _CameraPageState extends State<CameraPage> {
                 ),
                 quality: VideoRecordingQuality.fhd,
               ),
-              mirrorFrontCamera: true,
+              mirrorFrontCamera: Platform.isIOS ? false : true,
             ),
             sensorConfig: SensorConfig.single(
               sensor: Sensor.position(
@@ -234,6 +259,14 @@ class _CameraPageState extends State<CameraPage> {
                 ],
                 ultraWide: [
                   Visibility(
+                      visible: state is VideoCameraState,
+                      child: GestureDetector(
+                        onTap: () => _toggleAudio(),
+                        child: Icon(
+                          _audioEnabled ? Icons.volume_up : Icons.volume_off,
+                        ),
+                      )),
+                  Visibility(
                     visible: _hasUltraWide,
                     child: IconButton(
                       icon: Icon(
@@ -264,37 +297,24 @@ class _CameraPageState extends State<CameraPage> {
                   Visibility(
                     visible:
                         _recordedVideos.isEmpty && state is VideoCameraState,
-                    child: Center(
-                      child: GestureDetector(
-                        onTap: () {
-                          setState(() {
-                            final currentIndex = _preselectedVideoDurations
-                                .indexOf(_selectedDurationInSeconds);
-                            final nextIndex = (currentIndex + 1) %
-                                _preselectedVideoDurations.length;
-                            _selectedDurationInSeconds =
-                                _preselectedVideoDurations[nextIndex];
-                          });
-                        },
-                        child: Container(
-                          width: _appConfig.deviceWidth(15),
-                          height: _appConfig.deviceHeight(5),
-                          alignment: Alignment.center,
-                          padding: const EdgeInsets.symmetric(
-                              horizontal: 4, vertical: 8),
-                          decoration: BoxDecoration(
-                            color: Colors.black12,
-                            borderRadius: BorderRadius.circular(4),
-                          ),
-                          child: Text(
-                            _selectedDurationInSeconds >= 60
-                                ? "${_selectedDurationInSeconds ~/ 60} min"
-                                : "${_selectedDurationInSeconds} sec",
-                            style: const TextStyle(
-                              color: Colors.white,
-                              fontWeight: FontWeight.bold,
-                            ),
-                          ),
+                    child: GestureDetector(
+                      onTap: () {
+                        setState(() {
+                          final currentIndex = _preselectedVideoDurations
+                              .indexOf(_selectedDurationInSeconds);
+                          final nextIndex = (currentIndex + 1) %
+                              _preselectedVideoDurations.length;
+                          _selectedDurationInSeconds =
+                              _preselectedVideoDurations[nextIndex];
+                        });
+                      },
+                      child: Text(
+                        _selectedDurationInSeconds >= 60
+                            ? "${_selectedDurationInSeconds ~/ 60} m"
+                            : "${_selectedDurationInSeconds} s",
+                        style: const TextStyle(
+                          color: Colors.white,
+                          fontWeight: FontWeight.bold,
                         ),
                       ),
                     ),
