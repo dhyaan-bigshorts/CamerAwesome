@@ -23,97 +23,18 @@ import 'new_to_keep/app_config.dart';
 const kPreferredAspectRatio = CameraAspectRatios.ratio_16_9;
 const kPreferredAspectRatioValue = 16.0 / 9.0;
 
-class HomePage extends StatelessWidget {
-  const HomePage({Key? key}) : super(key: key);
-
-  void _openCamera(
-    BuildContext context, {
-    required bool photoMode,
-    required int maxImages,
-    CameraAspectRatios? aspect,
-    required bool isVideo,
-  }) {
-    Navigator.of(context).push(
-      MaterialPageRoute(
-        builder: (_) => CameraLauncher(
-          isPhoto: photoMode,
-          maxImages: maxImages,
-          initialAspectRatio: aspect ?? CameraAspectRatios.ratio_16_9,
-          isVideo: isVideo,
-        ),
-      ),
-    );
-  }
+class CameraAwesomeApp extends StatelessWidget {
+  const CameraAwesomeApp({super.key});
 
   @override
   Widget build(BuildContext context) {
-    return Scaffold(
-      appBar: AppBar(title: const Text('Pick your camera')),
-      body: Center(
-        child: Column(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            ElevatedButton(
-              onPressed: () => _openCamera(
-                context,
-                photoMode: true,
-                maxImages: 1,
-                isVideo: true,
-              ),
-              child: const Text('Ssup'),
-            ),
-            const SizedBox(height: 16),
-            ElevatedButton(
-              onPressed: () => _openCamera(
-                context,
-                photoMode: false,
-                aspect: CameraAspectRatios.ratio_16_9,
-                isVideo: true,
-                maxImages: 0, // videos only
-              ),
-              child: const Text('Snip'),
-            ),
-            const SizedBox(height: 16),
-            ElevatedButton(
-              onPressed: () => _openCamera(
-                context,
-                photoMode: true,
-                aspect: CameraAspectRatios.ratio_4_3,
-                maxImages: 20,
-                isVideo: false,
-              ),
-              child: const Text('Shot (max 20)'),
-            ),
-          ],
-        ),
+    return MaterialApp(
+      title: 'Multi Video Recorder',
+      theme: ThemeData(
+        primarySwatch: Colors.blue,
+        brightness: Brightness.dark,
       ),
-    );
-  }
-}
-
-class CameraLauncher extends StatelessWidget {
-  final bool isPhoto;
-  final CameraAspectRatios initialAspectRatio;
-  final int maxImages;
-  final bool isVideo;
-
-  const CameraLauncher(
-      {Key? key,
-      required this.isPhoto,
-      this.initialAspectRatio = CameraAspectRatios.ratio_16_9,
-      required this.maxImages,
-      required this.isVideo})
-      : super(key: key);
-
-  @override
-  Widget build(BuildContext context) {
-    return ChangeNotifierProvider<CameraPageState>(
-      create: (_) => CameraPageState()
-        ..isPhotoMode = isPhoto
-        ..isVideo = isVideo
-        ..maxImages = maxImages
-        ..preselectedAspectRatio = initialAspectRatio,
-      child: CameraAwesomeApp(), // <-- no `const`, no `builder:` needed
+      home: const CameraPage(),
     );
   }
 }
@@ -132,14 +53,12 @@ class CameraPageState extends ChangeNotifier {
   bool justRecorded = false;
   bool justCaptured = false;
   bool isPhotoMode = false;
-  bool isVideo = true;
-  bool isPhoto = false;
 
   // Durations
   final List<int> preselectedVideoDurations = [30, 45, 60, 120];
   int selectedDurationInSeconds = 120; // default 2 minutes
 
-  int maxImages = 20;
+  final int maxImages = 20;
 
   final List<CameraAspectRatios> aspectRatios = [
     CameraAspectRatios.ratio_16_9,
@@ -747,43 +666,22 @@ class _CameraPageState extends State<CameraPage> {
                 availableFilters: cameraState.filters,
                 defaultFilter: cameraState.selectedFilter,
                 currentFilter: cameraState.selectedFilter,
-                saveConfig: cameraState.isPhoto && cameraState.isVideo
-                    ? SaveConfig.photoAndVideo(
-                        initialCaptureMode: CaptureMode.video,
-                        videoOptions: VideoOptions(
-                          enableAudio: true,
-                          ios: CupertinoVideoOptions(
-                            fps: 60,
-                            codec: CupertinoCodecType.h264,
-                          ),
-                          android: AndroidVideoOptions(
-                            bitrate: 1200000,
-                            fallbackStrategy: QualityFallbackStrategy.lower,
-                          ),
-                          quality: VideoRecordingQuality.fhd,
-                        ),
-                        mirrorFrontCamera: Platform.isIOS ? false : true,
-                      )
-                    : cameraState.isPhoto && !cameraState.isVideo
-                        ? SaveConfig.photo(
-                            mirrorFrontCamera: Platform.isIOS ? false : true,
-                          )
-                        : SaveConfig.video(
-                            // initialCaptureMode: CaptureMode.video,
-                            videoOptions: VideoOptions(
-                              enableAudio: true,
-                              ios: CupertinoVideoOptions(
-                                fps: 60,
-                                codec: CupertinoCodecType.h264,
-                              ),
-                              android: AndroidVideoOptions(
-                                bitrate: 1200000,
-                                fallbackStrategy: QualityFallbackStrategy.lower,
-                              ),
-                              quality: VideoRecordingQuality.fhd,
-                            ),
-                            mirrorFrontCamera: Platform.isIOS ? false : true,
-                          ),
+                saveConfig: SaveConfig.photoAndVideo(
+                  initialCaptureMode: CaptureMode.video,
+                  videoOptions: VideoOptions(
+                    enableAudio: true,
+                    ios: CupertinoVideoOptions(
+                      fps: 60,
+                      codec: CupertinoCodecType.h264,
+                    ),
+                    android: AndroidVideoOptions(
+                      bitrate: 1200000,
+                      fallbackStrategy: QualityFallbackStrategy.lower,
+                    ),
+                    quality: VideoRecordingQuality.fhd,
+                  ),
+                  mirrorFrontCamera: Platform.isIOS ? false : true,
+                ),
                 sensorConfig: SensorConfig.single(
                   sensor: Sensor.position(
                     SensorPosition.back,
@@ -904,7 +802,7 @@ class _CameraPageState extends State<CameraPage> {
                       if (state.captureMode == CaptureMode.photo)
                         // Somewhere in your build:
                         ImageProgressBar(
-                          maxCount: cameraState.maxImages,
+                          maxCount: 20,
                           currentCount: cameraState.recordedPhotos.length,
                           backgroundColor: Colors.black45,
                           tickColor: Colors.white30,
@@ -1241,84 +1139,80 @@ class _CameraPageState extends State<CameraPage> {
                                 ),
                               ),
                       ),
-                      Visibility(
-                        visible: cameraState.isPhoto && cameraState.isVideo,
-                        child: Container(
-                          width: double.infinity,
-                          padding: EdgeInsets.only(bottom: 8),
-                          child: Row(
-                            crossAxisAlignment: CrossAxisAlignment.start,
-                            mainAxisAlignment: MainAxisAlignment.center,
-                            children: [
-                              // Toggle button for Photo/Video
-                              GestureDetector(
-                                // Toggle between photo and video modes
-                                onTap: () {
-                                  final isCurrentlyPhoto =
-                                      cameraState.isPhotoMode;
-                                  final hasMedia = isCurrentlyPhoto
-                                      ? cameraState.recordedPhotos.isNotEmpty
-                                      : cameraState.recordedVideos.isNotEmpty;
+                      Container(
+                        width: double.infinity,
+                        padding: EdgeInsets.only(bottom: 8),
+                        child: Row(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          mainAxisAlignment: MainAxisAlignment.center,
+                          children: [
+                            // Toggle button for Photo/Video
+                            GestureDetector(
+                              // Toggle between photo and video modes
+                              onTap: () {
+                                final isCurrentlyPhoto =
+                                    cameraState.isPhotoMode;
+                                final hasMedia = isCurrentlyPhoto
+                                    ? cameraState.recordedPhotos.isNotEmpty
+                                    : cameraState.recordedVideos.isNotEmpty;
 
-                                  if (hasMedia) {
-                                    _showModeSwitchDialog(state, context,
-                                        toPhoto: !isCurrentlyPhoto);
-                                  } else {
-                                    _performModeSwitch(
-                                        state, !isCurrentlyPhoto);
-                                  }
-                                },
+                                if (hasMedia) {
+                                  _showModeSwitchDialog(state, context,
+                                      toPhoto: !isCurrentlyPhoto);
+                                } else {
+                                  _performModeSwitch(state, !isCurrentlyPhoto);
+                                }
+                              },
 
-                                child: Container(
-                                  padding: EdgeInsets.symmetric(
-                                      horizontal: 16, vertical: 8),
-                                  decoration: BoxDecoration(
-                                    color: Colors.black.withOpacity(0.5),
-                                    borderRadius: BorderRadius.circular(20),
-                                  ),
-                                  child: Row(
-                                    mainAxisSize: MainAxisSize.min,
-                                    children: [
-                                      // Photo option
-                                      Text(
-                                        'Photo',
-                                        style: TextStyle(
-                                          color: cameraState.isPhotoMode
-                                              ? Colors.amber
-                                              : Colors.white.withOpacity(0.7),
-                                          fontWeight: cameraState.isPhotoMode
-                                              ? FontWeight.bold
-                                              : FontWeight.normal,
-                                        ),
+                              child: Container(
+                                padding: EdgeInsets.symmetric(
+                                    horizontal: 16, vertical: 8),
+                                decoration: BoxDecoration(
+                                  color: Colors.black.withOpacity(0.5),
+                                  borderRadius: BorderRadius.circular(20),
+                                ),
+                                child: Row(
+                                  mainAxisSize: MainAxisSize.min,
+                                  children: [
+                                    // Photo option
+                                    Text(
+                                      'Photo',
+                                      style: TextStyle(
+                                        color: cameraState.isPhotoMode
+                                            ? Colors.amber
+                                            : Colors.white.withOpacity(0.7),
+                                        fontWeight: cameraState.isPhotoMode
+                                            ? FontWeight.bold
+                                            : FontWeight.normal,
                                       ),
+                                    ),
 
-                                      // Divider
-                                      Container(
-                                        margin:
-                                            EdgeInsets.symmetric(horizontal: 8),
-                                        height: 15,
-                                        width: 1,
-                                        color: Colors.white.withOpacity(0.5),
-                                      ),
+                                    // Divider
+                                    Container(
+                                      margin:
+                                          EdgeInsets.symmetric(horizontal: 8),
+                                      height: 15,
+                                      width: 1,
+                                      color: Colors.white.withOpacity(0.5),
+                                    ),
 
-                                      // Video option
-                                      Text(
-                                        'Video',
-                                        style: TextStyle(
-                                          color: !cameraState.isPhotoMode
-                                              ? Colors.amber
-                                              : Colors.white.withOpacity(0.7),
-                                          fontWeight: !cameraState.isPhotoMode
-                                              ? FontWeight.bold
-                                              : FontWeight.normal,
-                                        ),
+                                    // Video option
+                                    Text(
+                                      'Video',
+                                      style: TextStyle(
+                                        color: !cameraState.isPhotoMode
+                                            ? Colors.amber
+                                            : Colors.white.withOpacity(0.7),
+                                        fontWeight: !cameraState.isPhotoMode
+                                            ? FontWeight.bold
+                                            : FontWeight.normal,
                                       ),
-                                    ],
-                                  ),
+                                    ),
+                                  ],
                                 ),
                               ),
-                            ],
-                          ),
+                            ),
+                          ],
                         ),
                       ),
                     ],
@@ -1389,8 +1283,10 @@ void main() {
     Sizer(
       builder: (context, orientation, deviceType) {
         return MaterialApp(
-          theme: ThemeData.dark(),
-          home: const HomePage(),
+          home: ChangeNotifierProvider(
+            create: (_) => CameraPageState(),
+            child: const CameraAwesomeApp(),
+          ),
         );
       },
     ),
