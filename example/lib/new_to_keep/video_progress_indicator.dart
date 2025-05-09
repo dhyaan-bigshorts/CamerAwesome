@@ -16,6 +16,7 @@ class VideoRecordingProgress extends StatefulWidget {
   final double height;
   final EdgeInsets padding;
   final double maxDuration;
+  final double? currentSpeed;
 
   final VoidCallback? stop;
 
@@ -27,6 +28,7 @@ class VideoRecordingProgress extends StatefulWidget {
       this.progressColor = Colors.red,
       this.backgroundColor = Colors.black45,
       this.height = 5.0,
+      this.currentSpeed,
       this.padding =
           const EdgeInsets.symmetric(horizontal: 16.0, vertical: 8.0),
       this.stop});
@@ -130,7 +132,14 @@ class _VideoRecordingProgressState extends State<VideoRecordingProgress> {
     _timer = Timer.periodic(const Duration(milliseconds: 100), (timer) {
       if (_recordingStartTime != null && mounted) {
         final elapsed = DateTime.now().difference(_recordingStartTime!);
-        final total = _totalPreviousDuration + elapsed;
+
+        // Apply speed adjustment to the elapsed time
+        final speedAdjustedElapsed = widget.currentSpeed != null
+            ? Duration(
+                microseconds:
+                    (elapsed.inMicroseconds / widget.currentSpeed!).round())
+            : elapsed;
+        final total = _totalPreviousDuration + speedAdjustedElapsed;
 
         if (total.inMilliseconds >= (widget.maxDuration * 60 * 1000).toInt()) {
           // Stop recording when max duration is reached
@@ -140,7 +149,7 @@ class _VideoRecordingProgressState extends State<VideoRecordingProgress> {
         }
 
         setState(() {
-          _currentDuration = elapsed;
+          _currentDuration = speedAdjustedElapsed;
         });
       }
     });

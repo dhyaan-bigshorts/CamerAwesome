@@ -25,6 +25,8 @@ dependencies:
   image_gallery_saver_plus: ^4.0.1
   sizer: ^3.0.4
   ffmpeg_kit_flutter_audio: ^6.0.3
+  provider: ^6.1.5
+  photo_view: ^0.15.0
 
 dev_dependencies:
   exif: ^3.3.0

@@ -35,7 +35,8 @@ class TimerController {
 
   // Dispose resources
   void dispose() {
-    cancelTimer();
+    // cancel without notifying—avoids calling setState on a defunct element
+    cancelTimer(notify: false);
   }
 
   // Set timer duration
@@ -89,14 +90,16 @@ class TimerController {
   }
 
   // Cancel the active timer without resetting selection
-  void cancelTimer() {
+  void cancelTimer({bool notify = true}) {
     if (_countdownTimer?.isActive ?? false) {
       _countdownTimer!.cancel();
     }
 
     _isTimerActive = false;
     _currentTimerSeconds = 0;
-    onTimerStateChanged();
+    if (notify) {
+      onTimerStateChanged();
+    }
   }
 
   // Build an elegant dropdown for timer selection

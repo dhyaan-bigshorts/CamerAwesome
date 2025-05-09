@@ -1,12 +1,19 @@
+import 'dart:io';
+import 'dart:math';
+
 import 'package:camera_app/new_to_keep/delete_confimation.dart';
+import 'package:camera_app/new_to_keep/image_progress_indicator.dart';
+import 'package:camera_app/new_to_keep/speed_controller.dart';
+import 'package:camera_app/new_to_keep/video_processor.dart';
+import 'package:camera_app/test/image_showing_logic.dart';
+import 'package:camera_app/test/videoplayinglogic.dart';
 import 'package:camerawesome/src/widgets/buttons/timer_controller.dart';
 import 'package:camera_app/new_to_keep/video_progress_indicator.dart';
 import 'package:camerawesome/camerawesome_plugin.dart';
 import 'package:camerawesome/pigeon.dart';
 import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
-import 'package:image_gallery_saver_plus/image_gallery_saver_plus.dart';
-import 'dart:io';
+import 'package:provider/provider.dart';
 import 'package:video_player/video_player.dart';
 import 'package:sizer/sizer.dart';
 
@@ -16,91 +23,424 @@ import 'new_to_keep/app_config.dart';
 const kPreferredAspectRatio = CameraAspectRatios.ratio_16_9;
 const kPreferredAspectRatioValue = 16.0 / 9.0;
 
-void main() {
-  runApp(
-    Sizer(
-      builder: (context, orientation, deviceType) {
-        return MaterialApp(home: const CameraAwesomeApp());
-      },
-    ),
-  );
-}
+class HomePage extends StatelessWidget {
+  const HomePage({Key? key}) : super(key: key);
 
-class CameraAwesomeApp extends StatelessWidget {
-  const CameraAwesomeApp({super.key});
+  void _openCamera(
+    BuildContext context, {
+    required bool photoMode,
+    required int maxImages,
+    CameraAspectRatios? aspect,
+    required bool isVideo,
+  }) {
+    Navigator.of(context).push(
+      MaterialPageRoute(
+        builder: (_) => CameraLauncher(
+          isPhoto: photoMode,
+          maxImages: maxImages,
+          initialAspectRatio: aspect ?? CameraAspectRatios.ratio_16_9,
+          isVideo: isVideo,
+        ),
+      ),
+    );
+  }
 
   @override
   Widget build(BuildContext context) {
-    return MaterialApp(
-      title: 'Multi Video Recorder',
-      theme: ThemeData(
-        primarySwatch: Colors.blue,
-        brightness: Brightness.dark,
+    return Scaffold(
+      appBar: AppBar(title: const Text('Pick your camera')),
+      body: Center(
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            ElevatedButton(
+              onPressed: () => _openCamera(
+                context,
+                photoMode: true,
+                maxImages: 1,
+                isVideo: true,
+              ),
+              child: const Text('Ssup'),
+            ),
+            const SizedBox(height: 16),
+            ElevatedButton(
+              onPressed: () => _openCamera(
+                context,
+                photoMode: false,
+                aspect: CameraAspectRatios.ratio_16_9,
+                isVideo: true,
+                maxImages: 0, // videos only
+              ),
+              child: const Text('Snip'),
+            ),
+            const SizedBox(height: 16),
+            ElevatedButton(
+              onPressed: () => _openCamera(
+                context,
+                photoMode: true,
+                aspect: CameraAspectRatios.ratio_4_3,
+                maxImages: 20,
+                isVideo: false,
+              ),
+              child: const Text('Shot (max 20)'),
+            ),
+          ],
+        ),
       ),
-      home: const CameraPage(),
     );
   }
 }
 
+class CameraLauncher extends StatelessWidget {
+  final bool isPhoto;
+  final CameraAspectRatios initialAspectRatio;
+  final int maxImages;
+  final bool isVideo;
+
+  const CameraLauncher(
+      {Key? key,
+      required this.isPhoto,
+      this.initialAspectRatio = CameraAspectRatios.ratio_16_9,
+      required this.maxImages,
+      required this.isVideo})
+      : super(key: key);
+
+  @override
+  Widget build(BuildContext context) {
+    return ChangeNotifierProvider<CameraPageState>(
+      create: (_) => CameraPageState()
+        ..isPhotoMode = isPhoto
+        ..isVideo = isVideo
+        ..maxImages = maxImages
+        ..preselectedAspectRatio = initialAspectRatio,
+      child: CameraAwesomeApp(), // <-- no `const`, no `builder:` needed
+    );
+  }
+}
+
+/// CameraState - A ChangeNotifier class to manage all camera state
+class CameraPageState extends ChangeNotifier {
+  // Camera settings
+  bool usingUltra = false;
+  bool hasUltraWide = false;
+  bool audioEnabled = true;
+  bool isFilterSelectionOpen = false;
+  bool showDeleteConfirmation = false;
+  bool showDeleteImageConfirmationDialog = false;
+  bool isProcessingVideos = false;
+  bool noMoreRecordings = false;
+  bool justRecorded = false;
+  bool justCaptured = false;
+  bool isPhotoMode = false;
+  bool isVideo = true;
+  bool isPhoto = false;
+
+  // Durations
+  final List<int> preselectedVideoDurations = [30, 45, 60, 120];
+  int selectedDurationInSeconds = 120; // default 2 minutes
+
+  int maxImages = 20;
+
+  final List<CameraAspectRatios> aspectRatios = [
+    CameraAspectRatios.ratio_16_9,
+    CameraAspectRatios.ratio_4_3,
+    CameraAspectRatios.ratio_1_1
+  ];
+  CameraAspectRatios preselectedAspectRatio = CameraAspectRatios.ratio_16_9;
+
+  // Filter settings
+  AwesomeFilter selectedFilter = AwesomeFilter.None;
+  final List<AwesomeFilter> filters = [
+    // Basic filter
+    AwesomeFilter.None,
+    // Monochrome Filters
+    AwesomeFilter.BlackWhiteGradient,
+    AwesomeFilter.Inkwell,
+    AwesomeFilter.Moon,
+    // Cool Tone Filters
+    AwesomeFilter.CoolToneGradient,
+    AwesomeFilter.DeepSeaGradient,
+    AwesomeFilter.TechGradient,
+    AwesomeFilter.Hudson,
+    // Warm Tone Filters
+    AwesomeFilter.WarmToneGradient,
+    AwesomeFilter.SunsetGradient,
+    AwesomeFilter.MintChocolateGradient,
+    AwesomeFilter.Walden,
+    // Vibrant Filters
+    AwesomeFilter.HighContrastGradient,
+    AwesomeFilter.NeonGradient,
+    AwesomeFilter.RainbowVibrance,
+    AwesomeFilter.Clarendon,
+    // Balanced RGB Filters
+    AwesomeFilter.Sunrise,
+    AwesomeFilter.Daylight,
+    AwesomeFilter.Jungle,
+    AwesomeFilter.Ocean,
+    AwesomeFilter.Emerald,
+    AwesomeFilter.Aurora,
+    AwesomeFilter.DeepSpace,
+    // Dual Tone Filters
+    AwesomeFilter.DualToneGradient,
+    AwesomeFilter.CyberGradient,
+    AwesomeFilter.NebulaGradient,
+    // Soft/Muted Filters
+    AwesomeFilter.PastelGradient,
+    AwesomeFilter.Gingham,
+    AwesomeFilter.Crema,
+    AwesomeFilter.Lark,
+    AwesomeFilter.Reyes,
+    AwesomeFilter.Sierra,
+    AwesomeFilter.Willow,
+  ];
+
+  // Recorded content
+  final List<String> recordedVideos = [];
+  bool doesAllowMultiplePhotos = false;
+  final List<String> recordedPhotos = [];
+  final List<Duration> recordedVideosDurations = [];
+  final List<double> recordedSpeeds = [];
+  final List<AwesomeFilter> selectedFilters = [];
+
+  // Helper functions with state updates
+  void setUltraWide(bool value) {
+    usingUltra = value;
+    notifyListeners();
+  }
+
+  void setHasUltraWide(bool value) {
+    hasUltraWide = value;
+    notifyListeners();
+  }
+
+  void toggleAudio() {
+    audioEnabled = !audioEnabled;
+    notifyListeners();
+  }
+
+  void openFilterSelection() {
+    isFilterSelectionOpen = true;
+    notifyListeners();
+  }
+
+  void closeFilterSelection() {
+    isFilterSelectionOpen = false;
+    notifyListeners();
+  }
+
+  void setSelectedFilter(AwesomeFilter filter) {
+    selectedFilter = filter;
+    notifyListeners();
+  }
+
+  void cycleDuration() {
+    final currentIndex =
+        preselectedVideoDurations.indexOf(selectedDurationInSeconds);
+    final nextIndex = (currentIndex + 1) % preselectedVideoDurations.length;
+    selectedDurationInSeconds = preselectedVideoDurations[nextIndex];
+    notifyListeners();
+  }
+
+  void cycleAspectRatio() {
+    final currentIndex = aspectRatios.indexOf(preselectedAspectRatio);
+    final nextIndex = (currentIndex + 1) % aspectRatios.length;
+    preselectedAspectRatio = aspectRatios[nextIndex];
+    notifyListeners();
+  }
+
+  void showDeleteConfirmationDialog() {
+    if (recordedVideos.isEmpty) return;
+    showDeleteConfirmation = true;
+    notifyListeners();
+  }
+
+  void showDeleteImageDialog() {
+    if (recordedPhotos.isEmpty) return;
+    showDeleteImageConfirmationDialog = true;
+    notifyListeners();
+  }
+
+  void cancelDelete() {
+    showDeleteConfirmation = false;
+    notifyListeners();
+  }
+
+  void cancelImageDelete() {
+    showDeleteImageConfirmationDialog = false;
+    notifyListeners();
+  }
+
+  void deleteLastVideo() {
+    if (recordedVideos.isEmpty) return;
+
+    final lastVideoPath = recordedVideos.last;
+
+    // Remove from lists
+    recordedVideos.removeLast();
+    if (recordedVideosDurations.isNotEmpty) {
+      recordedVideosDurations.removeLast();
+    }
+    if (recordedSpeeds.isNotEmpty) {
+      recordedSpeeds.removeLast();
+    }
+    if (selectedFilters.isNotEmpty) {
+      selectedFilters.removeLast();
+    }
+
+    noMoreRecordings = false;
+
+    // If no videos left, reset the flag
+    if (recordedVideos.isEmpty) {
+      justRecorded = false;
+    }
+    showDeleteConfirmation = false;
+
+    notifyListeners();
+
+    // Delete the file (moved outside notifyListeners to avoid blocking UI)
+    try {
+      final file = File(lastVideoPath);
+      if (file.existsSync()) {
+        file.deleteSync();
+      }
+    } catch (e) {
+      debugPrint('Error deleting video file: $e');
+    }
+  }
+
+  void deleteLastImage() {
+    if (recordedPhotos.isEmpty) return;
+
+    final lastVideoPath = recordedPhotos.last;
+
+    // Remove from lists
+    recordedPhotos.removeLast();
+
+    // If no videos left, reset the flag
+    if (recordedPhotos.isEmpty) {
+      justCaptured = false;
+    }
+    showDeleteImageConfirmationDialog = false;
+
+    notifyListeners();
+
+    // Delete the file (moved outside notifyListeners to avoid blocking UI)
+    try {
+      final file = File(lastVideoPath);
+      if (file.existsSync()) {
+        file.deleteSync();
+      }
+    } catch (e) {
+      debugPrint('Error deleting video file: $e');
+    }
+  }
+
+  void addRecordedVideo(
+      String path, Duration duration, double speed, AwesomeFilter filter) {
+    recordedVideos.add(path);
+    recordedVideosDurations.add(duration);
+    recordedSpeeds.add(speed);
+    selectedFilters.add(filter);
+    justRecorded = true;
+    notifyListeners();
+  }
+
+  void addClickedPhoto(String path) {
+    recordedPhotos.add(path);
+    justCaptured = true;
+    notifyListeners();
+  }
+
+  void resetJustCaptured() {
+    justCaptured = false;
+    notifyListeners();
+  }
+
+  void resetJustRecorded() {
+    justRecorded = false;
+    notifyListeners();
+  }
+
+  void setPhotoMode() {
+    isPhotoMode = true;
+    // clear out any prior video captures
+    recordedVideos.clear();
+    recordedVideosDurations.clear();
+    recordedSpeeds.clear();
+    selectedFilters.clear();
+    justRecorded = false;
+
+    notifyListeners();
+  }
+
+  void setVideoMode() {
+    isPhotoMode = false;
+    // clear out any prior photo captures
+    recordedPhotos.clear();
+    justCaptured = false;
+
+    notifyListeners();
+  }
+
+  void setNoMoreRecordings(bool value) {
+    noMoreRecordings = value;
+    notifyListeners();
+  }
+
+  void setProcessingVideos(bool value) {
+    isProcessingVideos = value;
+    notifyListeners();
+  }
+
+  // Helper method for filter names
+  String getFilterName(AwesomeFilter filter) {
+    return filter.toString().split('.').last.replaceAll('_', ' ');
+  }
+}
+
+/// Main CameraPage Widget
 class CameraPage extends StatefulWidget {
-  const CameraPage({super.key});
+  const CameraPage({Key? key}) : super(key: key);
 
   @override
   State<CameraPage> createState() => _CameraPageState();
 }
 
 class _CameraPageState extends State<CameraPage> {
-  // Store all recorded video paths
-  final List<String> _recordedVideos = [];
-  bool _justRecorded = false;
-
-  List<int> _preselectedVideoDurations = [30, 45, 60, 120];
-
-  int _selectedDurationInSeconds = 120; // default 2 minutes
-
-  bool _usingUltra = false;
-  bool _hasUltraWide = false; // Track if device has ultra-wide capability
   final _cameraApi = CameraInterface();
-
-  bool _audioEnabled = true;
-
-  void _toggleAudio() {
-    setState(() {
-      _audioEnabled = !_audioEnabled;
-    });
-    CamerawesomePlugin.setAudioMode(_audioEnabled).then((_) {
-      // Show feedback to user
-      // ScaffoldMessenger.of(context).showSnackBar(
-      //   SnackBar(
-      //     content: Text(
-      //         _audioEnabled ? 'Microphone enabled' : 'Microphone disabled'),
-      //     duration: const Duration(seconds: 1),
-      //   ),
-      // );
-    }).catchError((error) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(
-          content: Text("Error toggling microphone"),
-          duration: const Duration(seconds: 1),
-        ),
-      );
-    });
-  }
-
+  late SpeedController _speedController;
   late TimerController _timerController;
+  late ScrollController _filterScrollController;
 
   @override
   void initState() {
     super.initState();
-    _checkUltraWideSupport();
+
     _timerController = TimerController(
       themeApp: AwesomeTheme(bottomActionsBackgroundColor: Colors.transparent),
       onTimerComplete: _handleTimerComplete,
       onTimerStateChanged: () {
-        // Refresh UI when timer state changes
+        // Only using setState for timer UI which is independent of our Provider
         if (mounted) setState(() {});
       },
     );
+
+    _speedController = SpeedController(
+      speeds: [0.5, 1.0, 1.5, 2.0],
+      initialSpeed: 1.0,
+    );
+
+    _filterScrollController = ScrollController();
+
+    // Initialize device capabilities
+    _checkUltraWideSupport();
+  }
+
+  @override
+  void dispose() {
+    _timerController.cancelTimer(notify: false);
+    _filterScrollController.dispose();
+    super.dispose();
   }
 
   // Check if the device has ultra-wide camera support
@@ -111,28 +451,16 @@ class _CameraPageState extends State<CameraPage> {
           (sensor) => sensor?.sensorType == PigeonSensorType.ultraWideAngle);
 
       if (mounted) {
-        setState(() {
-          _hasUltraWide = hasUltraWide;
-        });
+        final cameraState =
+            Provider.of<CameraPageState>(context, listen: false);
+        cameraState.setHasUltraWide(hasUltraWide);
       }
 
-      if (!hasUltraWide && mounted) {
-        // ScaffoldMessenger.of(context).showSnackBar(
-        //   const SnackBar(
-        //     content: Text('Ultra-wide camera not available on this device'),
-        //     duration: Duration(seconds: 3),
-        //   ),
-        // );
-      }
-
-      debugPrint('Ultra-wide camera available: $_hasUltraWide');
+      debugPrint('Ultra-wide camera available: $hasUltraWide');
     } catch (e) {
       debugPrint('Error checking camera sensors: $e');
     }
   }
-
-  // 1. State variable to track durations
-  final List<Duration> _recordedVideosDurations = [];
 
   Future<Duration> getVideoDuration(String path) async {
     try {
@@ -147,355 +475,7 @@ class _CameraPageState extends State<CameraPage> {
     }
   }
 
-  bool _showDeleteConfirmation = false;
-  bool noMoreRecordings = false;
-  @override
-  Widget build(BuildContext context) {
-    AppConfig _appConfig = AppConfig(context);
-    return Stack(
-      children: [
-        Scaffold(
-          body: CameraAwesomeBuilder.awesome(
-            theme:
-                AwesomeTheme(bottomActionsBackgroundColor: Colors.transparent),
-            saveConfig: SaveConfig.video(
-              videoOptions: VideoOptions(
-                enableAudio: true,
-                ios: CupertinoVideoOptions(
-                  fps: 60,
-                  codec: CupertinoCodecType.h264,
-                ),
-                android: AndroidVideoOptions(
-                  bitrate: 1200000,
-                  fallbackStrategy: QualityFallbackStrategy.lower,
-                ),
-                quality: VideoRecordingQuality.fhd,
-              ),
-              mirrorFrontCamera: Platform.isIOS ? false : true,
-            ),
-            sensorConfig: SensorConfig.single(
-              sensor: Sensor.position(
-                SensorPosition.back,
-              ),
-              flashMode: FlashMode.auto,
-              aspectRatio: kPreferredAspectRatio,
-              zoom: 0.0,
-            ),
-
-            enablePhysicalButton: true,
-            onMediaCaptureEvent: (event) {
-              // Only handle video events
-              if (!event.isVideo) return;
-
-              switch (event.status) {
-                case MediaCaptureStatus.capturing:
-                  // Reset the justRecorded flag when starting a new recording
-                  if (mounted) {
-                    setState(() => _justRecorded = false);
-                  }
-                  break;
-                case MediaCaptureStatus.success:
-                  event.captureRequest.when(
-                    single: (single) async {
-                      final videoPath = single.file?.path;
-                      if (videoPath != null && mounted) {
-                        // Get actual duration from video file
-                        final duration = await getVideoDuration(videoPath);
-
-                        setState(() {
-                          _recordedVideos.add(videoPath);
-                          _recordedVideosDurations.add(duration);
-                          _justRecorded = true;
-                        });
-                      }
-                    },
-                    multiple: (multiple) {
-                      multiple.fileBySensor.forEach((key, value) {
-                        final path = value?.path;
-                        if (path != null && mounted) {
-                          setState(() {
-                            _recordedVideos.add(path);
-                          });
-                        }
-                      });
-
-                      if (mounted) {
-                        setState(() => _justRecorded = true);
-                      }
-                    },
-                  );
-                  break;
-                case MediaCaptureStatus.failure:
-                  break;
-              }
-            },
-            onMediaTap: (media) {
-              // Handle media tap if needed
-            },
-
-            topActionsBuilder: (state) {
-              // Get the current sensor position using the correct property path
-
-              return AwesomeTopActions(
-                state: state,
-                padding: EdgeInsets.only(
-                    left: AppConfig(context).deviceWidth(2),
-                    top: AppConfig(context).deviceHeight(1),
-                    right: AppConfig(context).deviceWidth(2)),
-                children: [
-                  VideoRecordingProgress(
-                    state: state is VideoRecordingCameraState ? state : null,
-                    previousRecordingsDurations: _recordedVideosDurations,
-                    maxDuration: _selectedDurationInSeconds / 60.0,
-                    stop: () {
-                      if (state is VideoRecordingCameraState) {
-                        state.stopRecording();
-                        setState(() {
-                          noMoreRecordings = true;
-                        });
-                      }
-                    },
-                  ),
-                ],
-                ultraWide: [
-                  Visibility(
-                      visible: state is VideoCameraState,
-                      child: GestureDetector(
-                        onTap: () => _toggleAudio(),
-                        child: Icon(
-                          _audioEnabled ? Icons.volume_up : Icons.volume_off,
-                        ),
-                      )),
-                  Visibility(
-                    visible: _hasUltraWide,
-                    child: IconButton(
-                      icon: Icon(
-                        Icons.filter_center_focus,
-                        color: _usingUltra ? Colors.amber : Colors.white,
-                      ),
-                      tooltip: _usingUltra ? 'Ultra-wide on' : 'Ultra-wide off',
-                      onPressed: () {
-                        // flip your boolean
-                        setState(() => _usingUltra = !_usingUltra);
-                        // now call into the native side with the new sensor list
-                        _cameraApi.setSensor(
-                          _usingUltra
-                              ? [
-                                  PigeonSensor(
-                                      type: PigeonSensorType.ultraWideAngle,
-                                      position: PigeonSensorPosition.back)
-                                ]
-                              : [
-                                  PigeonSensor(
-                                      type: PigeonSensorType.wideAngle,
-                                      position: PigeonSensorPosition.back)
-                                ],
-                        );
-                      },
-                    ),
-                  ),
-                  Visibility(
-                    visible:
-                        _recordedVideos.isEmpty && state is VideoCameraState,
-                    child: GestureDetector(
-                      onTap: () {
-                        setState(() {
-                          final currentIndex = _preselectedVideoDurations
-                              .indexOf(_selectedDurationInSeconds);
-                          final nextIndex = (currentIndex + 1) %
-                              _preselectedVideoDurations.length;
-                          _selectedDurationInSeconds =
-                              _preselectedVideoDurations[nextIndex];
-                        });
-                      },
-                      child: Text(
-                        _selectedDurationInSeconds >= 60
-                            ? "${_selectedDurationInSeconds ~/ 60} m"
-                            : "${_selectedDurationInSeconds} s",
-                        style: const TextStyle(
-                          color: Colors.white,
-                          fontWeight: FontWeight.bold,
-                        ),
-                      ),
-                    ),
-                  ),
-                  if (state is VideoCameraState)
-                    _timerController.buildElegantTimerSelector(context)
-                ],
-              );
-            },
-
-            // Use custom layout builders to provide the reset functionality
-            middleContentBuilder: (state) {
-              return Column(
-                mainAxisSize: MainAxisSize.max,
-                mainAxisAlignment: MainAxisAlignment.end,
-                crossAxisAlignment: CrossAxisAlignment.stretch,
-                children: [
-                  if (state is PhotoCameraState && state.hasFilters)
-                    AwesomeFilterWidget(state: state)
-                  else if (!kIsWeb && Platform.isAndroid)
-                    AwesomeZoomSelector(
-                      state: state,
-                      theme: AwesomeTheme(
-                        bottomActionsBackgroundColor: Colors.transparent,
-                      ),
-                    ),
-
-                  // always reserve the same space, but only show the IconButton when needed
-
-                  Visibility(
-                    visible: _recordedVideos.isNotEmpty,
-                    child: Padding(
-                      padding: const EdgeInsets.only(top: 16.0, bottom: 16.0),
-                      child: IconButton(
-                        icon: const Icon(Icons.backspace, color: Colors.white),
-                        tooltip: 'Delete last video',
-                        onPressed: _showDeleteConfirmationDialog,
-                      ),
-                    ),
-                  ),
-                ],
-              );
-            },
-
-            bottomActionsBuilder: (state) {
-              // For recording state, we don't show the Next button
-              if (state is VideoRecordingCameraState) {
-                return Column(
-                  mainAxisSize: MainAxisSize.min,
-                  children: [
-                    AwesomeBottomActions(
-                      state: state,
-                    ),
-                  ],
-                );
-              }
-
-              return Column(
-                mainAxisAlignment: MainAxisAlignment.end,
-                children: [
-                  AwesomeBottomActions(
-                    state: state,
-                    captureButton: ProductionCaptureButton(
-                      state: state,
-                      timerController: _timerController,
-                      onTap: () {
-                        if (!noMoreRecordings) {
-                          if (state is VideoRecordingCameraState) {
-                            // Already recording, stop recording
-                            state.stopRecording();
-                          } else if (!_timerController.isTimerActive) {
-                            // Not recording and timer not active, start timer or record
-                            _timerController.startTimerCountdown(state);
-                          } else {
-                            // Timer is active, cancel it
-                            _timerController.cancelTimer();
-                          }
-                        } else {
-                          ScaffoldMessenger.of(context).showSnackBar(
-                            const SnackBar(
-                              content: Text(
-                                  'Max duration allowed while recording has been reached'),
-                              duration: Duration(seconds: 2),
-                            ),
-                          );
-                        }
-                      },
-                    ),
-                    right: (_justRecorded)
-                        ? Padding(
-                            padding: const EdgeInsets.only(bottom: 16.0),
-                            child: ElevatedButton(
-                              onPressed: _navigateToGallery,
-                              style: ElevatedButton.styleFrom(
-                                backgroundColor: Colors.white,
-                                padding: const EdgeInsets.symmetric(
-                                    horizontal: 24, vertical: 12),
-                              ),
-                              child: const Text(
-                                'Next',
-                                style: TextStyle(
-                                  fontSize: 16,
-                                  fontWeight: FontWeight.bold,
-                                  color: Colors.black,
-                                ),
-                              ),
-                            ),
-                          )
-                        : Padding(
-                            padding: const EdgeInsets.only(bottom: 16.0),
-                            child: ElevatedButton(
-                              onPressed: null, // ← null disables it
-                              style: ElevatedButton.styleFrom(
-                                backgroundColor: Colors
-                                    .blue, // enabled color (ignored when disabled)
-                                disabledBackgroundColor: Colors.white
-                                    .withOpacity(0.4), // what you actually see
-                                disabledForegroundColor: Colors
-                                    .black, // text/icon color when disabled
-                                padding: const EdgeInsets.symmetric(
-                                  horizontal: 24,
-                                  vertical: 12,
-                                ),
-                              ),
-                              child: const Text(
-                                'Next',
-                                style: TextStyle(
-                                  fontSize: 16,
-                                  fontWeight: FontWeight.bold,
-                                  // color here is overridden by disabledForegroundColor
-                                ),
-                              ),
-                            ),
-                          ),
-                  ),
-                ],
-              );
-            },
-          ),
-        ), // The overlay - when showing it completely blocks interaction with anything underneath
-        if (_showDeleteConfirmation && _recordedVideos.isNotEmpty)
-          DeleteConfirmationOverlay(
-            // videoPath: _recordedVideos.last,
-            onConfirm: _deleteLastVideo,
-            onCancel: _cancelDelete,
-          ),
-
-        if (_timerController.isTimerActive)
-          Scaffold(
-              backgroundColor: Colors.transparent,
-              body: Center(
-                child: Container(
-                  height: 150,
-                  width: 150,
-                  decoration: BoxDecoration(
-                    color: Colors.black54,
-                    borderRadius: BorderRadius.circular(20),
-                  ),
-                  child: Center(
-                    child: Text(
-                      '${_timerController.currentTimerSeconds}',
-                      style: const TextStyle(
-                        color: Colors.white,
-                        fontSize: 80,
-                        fontWeight: FontWeight.bold,
-                      ),
-                    ),
-                  ),
-                ),
-              )),
-      ],
-    );
-  }
-
-  void dispose() {
-    _timerController.dispose();
-    super.dispose();
-  }
-
   void _handleTimerComplete(CameraState state) {
-    // Use the same pattern as in AwesomeCaptureButton
     state.when(
       onPhotoMode: (photoState) => photoState.takePhoto(),
       onVideoMode: (videoState) {
@@ -517,428 +497,902 @@ class _CameraPageState extends State<CameraPage> {
     );
   }
 
-  // Show confirmation dialog
-  void _showDeleteConfirmationDialog() {
-    if (_recordedVideos.isEmpty) return;
-    setState(() => _showDeleteConfirmation = true);
-  }
+  void _showFilterBottomSheet(BuildContext context) {
+    final cameraState = Provider.of<CameraPageState>(context, listen: false);
+    final selectedIndex =
+        cameraState.filters.indexOf(cameraState.selectedFilter);
 
-// Cancel deletion
-  void _cancelDelete() {
-    setState(() => _showDeleteConfirmation = false);
-  }
+    // Calculate scroll position after the bottom sheet is displayed
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (selectedIndex != -1 && _filterScrollController.hasClients) {
+        // Calculate the target position
+        final itemWidth = 120.0;
+        final screenWidth = MediaQuery.of(context).size.width;
+        double targetPosition = max(0,
+            (selectedIndex * itemWidth) - (screenWidth / 2) + (itemWidth / 2));
 
-  // Function to delete the last recorded video
-  void _deleteLastVideo() {
-    if (_recordedVideos.isNotEmpty) {
-      final lastVideoPath = _recordedVideos.last;
-
-      // Remove from the list first
-      setState(() {
-        _recordedVideos.removeLast();
-
-        if (_recordedVideosDurations.isNotEmpty) {
-          _recordedVideosDurations.removeLast();
-        }
-        noMoreRecordings = false;
-
-        // If no videos left, reset the flag
-        if (_recordedVideos.isEmpty) {
-          _justRecorded = false;
-        }
-        _showDeleteConfirmation = false;
-      });
-
-      // Attempt to delete the file from storage
-      try {
-        final file = File(lastVideoPath);
-        if (file.existsSync()) {
-          file.deleteSync();
-
-          // Show success message
-          ScaffoldMessenger.of(context).showSnackBar(
-            const SnackBar(
-              content: Text('Last recording deleted'),
-              duration: Duration(seconds: 2),
-            ),
-          );
-        }
-      } catch (e) {
-        debugPrint('Error deleting video file: $e');
+        // Scroll to the position
+        _filterScrollController.jumpTo(targetPosition);
       }
-    }
-  }
-
-  void _navigateToGallery() {
-    Navigator.of(context)
-        .push(
-      MaterialPageRoute(
-        builder: (context) => VideoGalleryPage(
-          videos: _recordedVideos,
-        ),
-      ),
-    )
-        .then((_) {
-      // Reset the "just recorded" flag when returning from gallery
     });
-  }
-}
 
-// Gallery page to view and play recorded videos
-class VideoGalleryPage extends StatelessWidget {
-  final List<String> videos;
-
-  const VideoGalleryPage({
-    super.key,
-    required this.videos,
-  });
-
-  @override
-  Widget build(BuildContext context) {
-    return SafeArea(
-      child: Scaffold(
-        appBar: AppBar(
-          title: const Text('Recorded Videos'),
-          leading: IconButton(
-            icon: const Icon(Icons.arrow_back),
-            onPressed: () => Navigator.of(context).pop(),
-          ),
-        ),
-        body: videos.isEmpty
-            ? const Center(child: Text('No videos recorded yet'))
-            : GridView.builder(
-                padding: const EdgeInsets.all(8),
-                gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
-                  crossAxisCount: 2,
-                  crossAxisSpacing: 8,
-                  mainAxisSpacing: 8,
-                  childAspectRatio:
-                      kPreferredAspectRatioValue, // Using constant
-                ),
-                itemCount: videos.length,
-                itemBuilder: (context, index) {
-                  final videoPath = videos[index];
-                  return VideoThumbnail(
-                    videoPath: videoPath,
-                    onTap: () => _navigateToVideoPlayer(context, videoPath),
-                  );
-                },
-              ),
-      ),
-    );
-  }
-
-  void _navigateToVideoPlayer(BuildContext context, String videoPath) {
-    Navigator.of(context).push(
-      MaterialPageRoute(
-        builder: (context) => VideoPlayerPage(videoPath: videoPath),
-      ),
-    );
-  }
-}
-
-// Video thumbnail widget
-class VideoThumbnail extends StatelessWidget {
-  final String videoPath;
-  final VoidCallback onTap;
-
-  const VideoThumbnail({
-    super.key,
-    required this.videoPath,
-    required this.onTap,
-  });
-
-  @override
-  Widget build(BuildContext context) {
-    return GestureDetector(
-      onTap: onTap,
-      child: AspectRatio(
-        aspectRatio: kPreferredAspectRatioValue,
-        child: Stack(
-          fit: StackFit.expand,
-          children: [
-            // Use a container with a color as placeholder
-            Container(
-              color: Colors.black54,
-              child: Center(
-                child: Text(
-                  'Video ${videoPath.split('/').last}',
-                  textAlign: TextAlign.center,
-                  style: const TextStyle(color: Colors.white70),
+    showModalBottomSheet(
+      context: context,
+      backgroundColor: Colors.transparent,
+      isScrollControlled: true,
+      isDismissible: true,
+      builder: (context) {
+        return Consumer<CameraPageState>(
+          builder: (context, state, _) {
+            return Container(
+              height: 200,
+              padding: const EdgeInsets.symmetric(vertical: 20),
+              decoration: BoxDecoration(
+                color: Colors.black.withOpacity(0.8),
+                borderRadius: const BorderRadius.only(
+                  topLeft: Radius.circular(20),
+                  topRight: Radius.circular(20),
                 ),
               ),
-            ),
-            // Play icon overlay
-            const Center(
-              child: Icon(
-                Icons.play_circle_fill,
-                size: 50,
-                color: Colors.white70,
-              ),
-            ),
-          ],
-        ),
-      ),
-    );
-  }
-}
-
-// Video player page
-class VideoPlayerPage extends StatefulWidget {
-  final String videoPath;
-
-  const VideoPlayerPage({
-    super.key,
-    required this.videoPath,
-  });
-
-  @override
-  State<VideoPlayerPage> createState() => _VideoPlayerPageState();
-}
-
-class _VideoPlayerPageState extends State<VideoPlayerPage>
-    with WidgetsBindingObserver {
-  VideoPlayerController? _controller;
-  bool _isInitialized = false;
-  bool _isPlaying = false;
-  bool _isDisposed = false;
-
-  @override
-  void initState() {
-    super.initState();
-    WidgetsBinding.instance.addObserver(this);
-    _initializeVideoPlayer();
-  }
-
-  void _initializeVideoPlayer() async {
-    try {
-      // Create a VideoPlayerController for a file
-      final controller = VideoPlayerController.file(File(widget.videoPath));
-      _controller = controller;
-
-      // Initialize the controller and update state when done
-      await controller.initialize();
-
-      if (_isDisposed || !mounted) {
-        // Widget was disposed during initialization
-        return;
-      }
-
-      // Add listener to update state when video status changes
-      controller.addListener(_videoPlayerListener);
-
-      if (mounted) {
-        setState(() {
-          _isInitialized = true;
-        });
-      }
-    } catch (e) {
-      debugPrint('Error initializing video player: $e');
-      if (mounted && !_isDisposed) {
-        _showErrorSnackBar('Failed to load video: $e');
-      }
-    }
-  }
-
-  void _videoPlayerListener() {
-    if (_isDisposed || !mounted || _controller == null) return;
-
-    final playing = _controller!.value.isPlaying;
-    if (playing != _isPlaying) {
-      setState(() {
-        _isPlaying = playing;
-      });
-    }
-  }
-
-  @override
-  void didChangeAppLifecycleState(AppLifecycleState state) {
-    final controller = _controller;
-    // Pause video playback when app goes to background
-    if (state == AppLifecycleState.inactive ||
-        state == AppLifecycleState.paused) {
-      if (controller != null && controller.value.isPlaying) {
-        controller.pause();
-      }
-    }
-  }
-
-  @override
-  void dispose() {
-    _isDisposed = true;
-
-    WidgetsBinding.instance.removeObserver(this);
-
-    // Clean up the controller when the widget is disposed
-    final controller = _controller;
-    if (controller != null) {
-      controller.removeListener(_videoPlayerListener);
-      controller.pause();
-      controller.dispose();
-    }
-    _controller = null;
-
-    super.dispose();
-  }
-
-  Future<void> _playPause() async {
-    if (_controller == null) return;
-
-    // VideoPlayerController.dataSource returns a uri‐style string:
-    var src = _controller!.dataSource;
-
-    // If it’s a local file, strip the "file://" scheme off:
-    if (src.startsWith('file://')) {
-      src = src.replaceFirst('file://', '');
-    }
-
-    // Now make sure that file actually exists:
-    final videoFile = File(src);
-    if (!await videoFile.exists()) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text('Video file not found at $src')),
-      );
-      return;
-    }
-
-    // Save to gallery
-    final result = await ImageGallerySaverPlus.saveFile(src);
-    if (_controller == null || !_isInitialized || _isDisposed || !mounted)
-      return;
-
-    try {
-      if (_controller!.value.isPlaying) {
-        _controller!.pause();
-      } else {
-        _controller!.play();
-      }
-    } catch (e) {
-      debugPrint('Error toggling play/pause: $e');
-    }
-  }
-
-  @override
-  Widget build(BuildContext context) {
-    if (_isDisposed) {
-      return const SizedBox.shrink(); // Safety check
-    }
-
-    return Scaffold(
-      appBar: AppBar(
-        title: const Text('Video Player'),
-      ),
-      body: Column(
-        children: [
-          if (_isInitialized && _controller != null)
-            // Use a container to force the aspect ratio if needed
-            AspectRatio(
-              aspectRatio: _controller!.value.aspectRatio.isNaN
-                  ? kPreferredAspectRatioValue
-                  : _controller!.value.aspectRatio,
-              child: VideoPlayer(_controller!),
-            )
-          else
-            // Loading indicator while video initializes
-            AspectRatio(
-              aspectRatio:
-                  kPreferredAspectRatioValue, // Consistent aspect ratio
-              child: const Center(
-                child: CircularProgressIndicator(),
-              ),
-            ),
-
-          // Playback controls
-          Padding(
-            padding: const EdgeInsets.all(16.0),
-            child: Row(
-              mainAxisAlignment: MainAxisAlignment.center,
-              children: [
-                // Play/Pause button
-                IconButton(
-                  icon: Icon(
-                    _isPlaying ? Icons.pause : Icons.play_arrow,
-                    size: 40,
-                  ),
-                  onPressed:
-                      _isInitialized && _controller != null ? _playPause : null,
-                ),
-
-                // Video position indicator
-                if (_isInitialized && _controller != null)
-                  Expanded(
-                    child: VideoProgressIndicator(
-                      _controller!,
-                      allowScrubbing: true,
-                      padding: const EdgeInsets.symmetric(horizontal: 16),
+              child: Column(
+                children: [
+                  // Handle indicator at top
+                  Container(
+                    width: 40,
+                    height: 5,
+                    margin: const EdgeInsets.only(bottom: 15),
+                    decoration: BoxDecoration(
+                      color: Colors.white.withOpacity(0.5),
+                      borderRadius: BorderRadius.circular(2.5),
                     ),
                   ),
-              ],
-            ),
-          ),
 
-          // Video details and external player option
-          Expanded(
-            child: Center(
-              child: Column(
-                mainAxisAlignment: MainAxisAlignment.center,
-                children: [
-                  Text(
-                    'Playing: ${widget.videoPath.split('/').last}',
-                    textAlign: TextAlign.center,
-                    style: const TextStyle(fontWeight: FontWeight.bold),
+                  // Title
+                  const Padding(
+                    padding: EdgeInsets.only(bottom: 15),
+                    child: Text(
+                      'Select Filter',
+                      style: TextStyle(
+                        color: Colors.white,
+                        fontSize: 18,
+                        fontWeight: FontWeight.bold,
+                      ),
+                    ),
                   ),
-                  const SizedBox(height: 20),
 
-                  // Open in external player button
-                  ElevatedButton.icon(
-                    onPressed: () => _openVideoExternally(widget.videoPath),
-                    icon: const Icon(Icons.open_in_new),
-                    label: const Text('Open in External Player'),
+                  // Filter ListView
+                  Expanded(
+                    child: ListView.builder(
+                      controller: _filterScrollController,
+                      scrollDirection: Axis.horizontal,
+                      padding: const EdgeInsets.symmetric(horizontal: 20),
+                      itemCount: state.filters.length,
+                      itemBuilder: (context, index) {
+                        final isSelected =
+                            state.selectedFilter == state.filters[index];
+                        return GestureDetector(
+                          onTap: () {
+                            state.setSelectedFilter(state.filters[index]);
+                          },
+                          child: Container(
+                            width: 100,
+                            margin: const EdgeInsets.symmetric(horizontal: 10),
+                            decoration: BoxDecoration(
+                              border: Border.all(
+                                color: isSelected
+                                    ? Colors.blue
+                                    : Colors.white.withOpacity(0.5),
+                                width: 2,
+                              ),
+                              borderRadius: BorderRadius.circular(12),
+                              color: isSelected
+                                  ? Colors.blue.withOpacity(0.2)
+                                  : Colors.transparent,
+                            ),
+                            child: Column(
+                              mainAxisAlignment: MainAxisAlignment.center,
+                              children: [
+                                Icon(
+                                  Icons.filter,
+                                  color:
+                                      isSelected ? Colors.amber : Colors.white,
+                                  size: 30,
+                                ),
+                                const SizedBox(height: 8),
+                                Text(
+                                  state.filters[index].name,
+                                  textAlign: TextAlign.center,
+                                  style: TextStyle(
+                                    color: isSelected
+                                        ? Colors.amber
+                                        : Colors.white,
+                                    fontSize: 14,
+                                    fontWeight: isSelected
+                                        ? FontWeight.bold
+                                        : FontWeight.normal,
+                                  ),
+                                ),
+                              ],
+                            ),
+                          ),
+                        );
+                      },
+                    ),
                   ),
                 ],
               ),
-            ),
+            );
+          },
+        );
+      },
+    ).then((_) {
+      cameraState.closeFilterSelection();
+    });
+  }
+
+  Future<void> _navigateToImageGallery() async {
+    final cameraState = Provider.of<CameraPageState>(context, listen: false);
+    if (cameraState.recordedPhotos.isEmpty) return;
+
+    if (!mounted) return;
+
+    Navigator.of(context).push(
+      MaterialPageRoute(
+        builder: (context) => ImageGalleryPage(
+          images: cameraState.recordedPhotos,
+        ),
+      ),
+    );
+  }
+
+  void _performModeSwitch(CameraState state, bool toPhoto) {
+    final cameraState = Provider.of<CameraPageState>(context, listen: false);
+    if (toPhoto) {
+      cameraState.setPhotoMode();
+      state.setState(CaptureMode.photo);
+    } else {
+      cameraState.setVideoMode();
+      state.setState(CaptureMode.video);
+    }
+  }
+
+  void _showModeSwitchDialog(CameraState state, BuildContext context,
+      {required bool toPhoto}) {
+    final modeName = toPhoto ? 'Photo' : 'Video';
+    final loseWhat = toPhoto ? 'all recorded videos' : 'all captured photos';
+
+    showDialog(
+      context: context,
+      builder: (dialogContext) => AlertDialog(
+        title: Text('Switch to $modeName mode?'),
+        content: Text('You will lose $loseWhat if you continue.'),
+        actions: [
+          TextButton(
+            onPressed: () =>
+                Navigator.of(dialogContext).pop(), // <— use dialogContext
+            child: const Text('Cancel'),
+          ),
+          TextButton(
+            onPressed: () {
+              Navigator.of(dialogContext).pop(); // <— use dialogContext
+              _performModeSwitch(state, toPhoto);
+            },
+            child: const Text('Continue'),
           ),
         ],
       ),
     );
   }
 
-  // Method to open video in external player
-  void _openVideoExternally(String path) async {
-    final file = File(path);
-    if (!file.existsSync()) {
-      debugPrint('Video file not found: $path');
-      _showErrorSnackBar('Video file not found');
-      return;
-    }
+  Future<void> _navigateToGallery() async {
+    final cameraState = Provider.of<CameraPageState>(context, listen: false);
+    if (cameraState.recordedVideos.isEmpty) return;
+
+    cameraState.setProcessingVideos(true);
 
     try {
-      // Uncomment this to use url_launcher
-      // final uri = Uri.file(path);
-      // if (await canLaunchUrl(uri)) {
-      //   await launchUrl(uri, mode: LaunchMode.externalApplication);
-      // } else {
-      //   debugPrint('Cannot launch external player for: $uri');
-      //   _showErrorSnackBar('Cannot open external player');
-      // }
+      // Apply filter to videos
+      //todo
+      // List<String> filteredVideos = await VideoFilter.applyFilterToVideos(
+      //   videoPaths: cameraState.recordedVideos,
+      //   filters: cameraState.selectedFilters,
+      // );
 
-      // For now, just show file info
-      debugPrint('Video file size: ${file.lengthSync()} bytes');
+      cameraState.setProcessingVideos(false);
+
+      // Navigate to gallery with filtered videos
+      if (!mounted) return;
+
+      Navigator.of(context).push(
+        MaterialPageRoute(
+          builder: (context) => VideoGalleryPage(
+            videos: cameraState.recordedVideos,
+            speeds: cameraState.recordedSpeeds,
+          ),
+        ),
+      );
     } catch (e) {
-      debugPrint('Error opening video: $e');
-      _showErrorSnackBar('Error: $e');
+      // Handle errors
+      cameraState.setProcessingVideos(false);
+
+      // Show error
+      if (!mounted) return;
+
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text('Error: $e')),
+      );
+
+      // Navigate with original videos
+      Navigator.of(context).push(
+        MaterialPageRoute(
+          builder: (context) => VideoGalleryPage(
+            videos: cameraState.recordedVideos,
+            speeds: cameraState.recordedSpeeds,
+          ),
+        ),
+      );
     }
   }
 
-  void _showErrorSnackBar(String message) {
-    if (_isDisposed || !mounted) return;
+  @override
+  Widget build(BuildContext context) {
+    return Consumer<CameraPageState>(
+      builder: (context, cameraState, _) {
+        return Stack(
+          children: [
+            Scaffold(
+              body: CameraAwesomeBuilder.awesome(
+                theme: AwesomeTheme(
+                    bottomActionsBackgroundColor: Colors.transparent),
+                availableFilters: cameraState.filters,
+                defaultFilter: cameraState.selectedFilter,
+                currentFilter: cameraState.selectedFilter,
+                saveConfig: cameraState.isPhoto && cameraState.isVideo
+                    ? SaveConfig.photoAndVideo(
+                        initialCaptureMode: CaptureMode.video,
+                        videoOptions: VideoOptions(
+                          enableAudio: true,
+                          ios: CupertinoVideoOptions(
+                            fps: 60,
+                            codec: CupertinoCodecType.h264,
+                          ),
+                          android: AndroidVideoOptions(
+                            bitrate: 1200000,
+                            fallbackStrategy: QualityFallbackStrategy.lower,
+                          ),
+                          quality: VideoRecordingQuality.fhd,
+                        ),
+                        mirrorFrontCamera: Platform.isIOS ? false : true,
+                      )
+                    : cameraState.isPhoto && !cameraState.isVideo
+                        ? SaveConfig.photo(
+                            mirrorFrontCamera: Platform.isIOS ? false : true,
+                          )
+                        : SaveConfig.video(
+                            // initialCaptureMode: CaptureMode.video,
+                            videoOptions: VideoOptions(
+                              enableAudio: true,
+                              ios: CupertinoVideoOptions(
+                                fps: 60,
+                                codec: CupertinoCodecType.h264,
+                              ),
+                              android: AndroidVideoOptions(
+                                bitrate: 1200000,
+                                fallbackStrategy: QualityFallbackStrategy.lower,
+                              ),
+                              quality: VideoRecordingQuality.fhd,
+                            ),
+                            mirrorFrontCamera: Platform.isIOS ? false : true,
+                          ),
+                sensorConfig: SensorConfig.single(
+                  sensor: Sensor.position(
+                    SensorPosition.back,
+                  ),
+                  flashMode: FlashMode.auto,
+                  aspectRatio: kPreferredAspectRatio,
+                  zoom: 0.0,
+                ),
+                enablePhysicalButton: true,
+                onMediaCaptureEvent: (event) {
+                  // Handle both photo and video events
+                  switch (event.status) {
+                    case MediaCaptureStatus.capturing:
+                      // Reset flags when starting to capture
+                      cameraState.resetJustRecorded();
+                      break;
+                    case MediaCaptureStatus.success:
+                      if (event.isVideo) {
+                        // Handle video capture success
+                        event.captureRequest.when(
+                          single: (single) async {
+                            final videoPath = single.file?.path;
+                            if (videoPath != null) {
+                              // Get actual duration from video file
+                              final duration =
+                                  await getVideoDuration(videoPath);
 
-    ScaffoldMessenger.of(context).showSnackBar(
-      SnackBar(
-        content: Text(message),
-        backgroundColor: Colors.red,
-      ),
+                              Duration adjustedDuration = Duration(
+                                  milliseconds: (duration.inMilliseconds /
+                                          _speedController.currentSpeed)
+                                      .round());
+
+                              cameraState.addRecordedVideo(
+                                videoPath,
+                                adjustedDuration,
+                                _speedController.currentSpeed,
+                                cameraState.selectedFilter,
+                              );
+                            }
+                          },
+                          multiple: (multiple) {
+                            multiple.fileBySensor.forEach((key, value) {
+                              final path = value?.path;
+                              if (path != null) {
+                                // Note: This is simplified since we don't have duration info
+                                // You might want to process multiple videos differently
+                                cameraState.recordedVideos.add(path);
+                                cameraState.justRecorded = true;
+                                cameraState.notifyListeners();
+                              }
+                            });
+                          },
+                        );
+                      } else {
+                        // Handle photo capture success
+                        event.captureRequest.when(
+                          single: (single) {
+                            final photoPath = single.file?.path;
+                            if (photoPath != null) {
+                              // Handle the photo capture success - display a toast message
+                              cameraState.addClickedPhoto(photoPath);
+
+                              // Optionally, you could store the photo path if needed
+                              // cameraState.addCapturedPhoto(photoPath, cameraState.selectedFilter);
+                            }
+                          },
+                          multiple: (multiple) {
+                            // Handle multiple photos if needed
+                            multiple.fileBySensor.forEach((key, value) {
+                              final path = value?.path;
+                              if (path != null) {
+                                // Handle multiple photo captures if needed
+                                print('Multiple photo captured: $path');
+                              }
+                            });
+                          },
+                        );
+                      }
+                      break;
+                    case MediaCaptureStatus.failure:
+                      // Handle failure for both photo and video
+                      ScaffoldMessenger.of(context).showSnackBar(
+                        SnackBar(
+                          content: Text('Capture failed'),
+                          duration: Duration(seconds: 2),
+                        ),
+                      );
+                      break;
+                  }
+                },
+                topActionsBuilder: (state) {
+                  state.setFilter(cameraState.selectedFilter);
+
+                  return AwesomeTopActions(
+                    state: state,
+                    padding: EdgeInsets.only(
+                      left: AppConfig(context).deviceWidth(2),
+                      top: AppConfig(context).deviceHeight(1),
+                      right: AppConfig(context).deviceWidth(2),
+                    ),
+                    children: [
+                      if (state.captureMode == CaptureMode.video)
+                        VideoRecordingProgress(
+                          state:
+                              state is VideoRecordingCameraState ? state : null,
+                          currentSpeed: _speedController.currentSpeed,
+                          previousRecordingsDurations:
+                              cameraState.recordedVideosDurations,
+                          maxDuration:
+                              cameraState.selectedDurationInSeconds / 60.0,
+                          stop: () {
+                            if (state is VideoRecordingCameraState) {
+                              state.stopRecording();
+                              cameraState.setNoMoreRecordings(true);
+                            }
+                          },
+                        ),
+                      if (state.captureMode == CaptureMode.photo)
+                        // Somewhere in your build:
+                        ImageProgressBar(
+                          maxCount: cameraState.maxImages,
+                          currentCount: cameraState.recordedPhotos.length,
+                          backgroundColor: Colors.black45,
+                          tickColor: Colors.white30,
+                          height: 6,
+                        ),
+                    ],
+                    ultraWide: [
+                      if (state is PhotoCameraState)
+                        GestureDetector(
+                          onTap: () {
+                            cameraState.cycleAspectRatio();
+                            state.sensorConfig.setAspectRatio(
+                                cameraState.preselectedAspectRatio);
+                          },
+                          child: Padding(
+                            padding: const EdgeInsets.symmetric(vertical: 10.0),
+                            child: Text(
+                              cameraState.preselectedAspectRatio ==
+                                      CameraAspectRatios.ratio_16_9
+                                  ? "9:16"
+                                  : cameraState.preselectedAspectRatio ==
+                                          CameraAspectRatios.ratio_1_1
+                                      ? "1:1"
+                                      : "3:4",
+                              style: const TextStyle(
+                                color: Colors.white,
+                                fontWeight: FontWeight.bold,
+                              ),
+                            ),
+                          ),
+                        ),
+                      Visibility(
+                        visible: state is VideoCameraState,
+                        child: GestureDetector(
+                          onTap: () {
+                            cameraState.toggleAudio();
+                            CamerawesomePlugin.setAudioMode(
+                                    cameraState.audioEnabled)
+                                .catchError((error) {
+                              ScaffoldMessenger.of(context).showSnackBar(
+                                const SnackBar(
+                                  content: Text("Error toggling microphone"),
+                                  duration: Duration(seconds: 1),
+                                ),
+                              );
+                            });
+                          },
+                          child: Padding(
+                            padding: const EdgeInsets.symmetric(vertical: 8.0),
+                            child: Icon(
+                              cameraState.audioEnabled
+                                  ? Icons.volume_up
+                                  : Icons.volume_off,
+                            ),
+                          ),
+                        ),
+                      ),
+                      if (state is VideoCameraState)
+                        SpeedOverlaySelector(controller: _speedController),
+                      if (state is VideoCameraState ||
+                          state is PhotoCameraState)
+                        Visibility(
+                          visible: cameraState.hasUltraWide,
+                          child: Padding(
+                            padding: const EdgeInsets.symmetric(vertical: 8.0),
+                            child: IconButton(
+                              icon: Icon(
+                                Icons.filter_center_focus,
+                                color: cameraState.usingUltra
+                                    ? Colors.amber
+                                    : Colors.white,
+                              ),
+                              tooltip: cameraState.usingUltra
+                                  ? 'Ultra-wide on'
+                                  : 'Ultra-wide off',
+                              onPressed: () {
+                                cameraState
+                                    .setUltraWide(!cameraState.usingUltra);
+                                _cameraApi.setSensor(
+                                  cameraState.usingUltra
+                                      ? [
+                                          PigeonSensor(
+                                              type: PigeonSensorType
+                                                  .ultraWideAngle,
+                                              position:
+                                                  PigeonSensorPosition.back)
+                                        ]
+                                      : [
+                                          PigeonSensor(
+                                              type: PigeonSensorType.wideAngle,
+                                              position:
+                                                  PigeonSensorPosition.back)
+                                        ],
+                                );
+                              },
+                            ),
+                          ),
+                        ),
+                      if (state is VideoCameraState ||
+                          state is PhotoCameraState)
+                        Visibility(
+                          child: Padding(
+                            padding: const EdgeInsets.only(top: 8.0),
+                            child: _timerController
+                                .buildElegantTimerSelector(context),
+                          ),
+                        ),
+                      if (cameraState.recordedVideos.isEmpty &&
+                          state is VideoCameraState)
+                        GestureDetector(
+                          onTap: () => cameraState.cycleDuration(),
+                          child: Padding(
+                            padding: const EdgeInsets.symmetric(vertical: 10.0),
+                            child: Text(
+                              cameraState.selectedDurationInSeconds >= 60
+                                  ? "${cameraState.selectedDurationInSeconds ~/ 60} m"
+                                  : "${cameraState.selectedDurationInSeconds} s",
+                              style: const TextStyle(
+                                color: Colors.white,
+                                fontWeight: FontWeight.bold,
+                              ),
+                            ),
+                          ),
+                        ),
+                    ],
+                  );
+                },
+                middleContentBuilder: (state) {
+                  return Column(
+                    mainAxisSize: MainAxisSize.max,
+                    mainAxisAlignment: MainAxisAlignment.end,
+                    crossAxisAlignment: CrossAxisAlignment.stretch,
+                    children: [
+                      if (!kIsWeb && Platform.isAndroid)
+                        AwesomeZoomSelector(
+                          state: state,
+                          theme: AwesomeTheme(
+                            bottomActionsBackgroundColor: Colors.transparent,
+                          ),
+                        ),
+                      Visibility(
+                        visible: cameraState.recordedVideos.isNotEmpty &&
+                            state is VideoCameraState,
+                        child: Padding(
+                          padding:
+                              const EdgeInsets.only(top: 16.0, bottom: 16.0),
+                          child: IconButton(
+                            icon: const Icon(Icons.backspace,
+                                color: Colors.white),
+                            tooltip: 'Delete last video',
+                            onPressed: cameraState.showDeleteConfirmationDialog,
+                          ),
+                        ),
+                      ),
+                      Visibility(
+                        visible: cameraState.recordedPhotos.isNotEmpty &&
+                            state is PhotoCameraState,
+                        child: Padding(
+                          padding:
+                              const EdgeInsets.only(top: 16.0, bottom: 16.0),
+                          child: IconButton(
+                            icon: const Icon(Icons.backspace,
+                                color: Colors.white),
+                            tooltip: 'Delete last video',
+                            onPressed: cameraState.showDeleteImageDialog,
+                          ),
+                        ),
+                      ),
+                    ],
+                  );
+                },
+                bottomActionsBuilder: (state) {
+                  if (cameraState.isFilterSelectionOpen) {
+                    return Container();
+                  }
+
+                  // For recording state, we don't show the Next button
+                  if (state is VideoRecordingCameraState) {
+                    return Column(
+                      mainAxisSize: MainAxisSize.max,
+                      mainAxisAlignment: MainAxisAlignment.end,
+                      crossAxisAlignment: CrossAxisAlignment.stretch,
+                      children: [
+                        Padding(
+                          padding: const EdgeInsets.all(8.0),
+                          child: AwesomeBottomActions(
+                            state: state,
+                          ),
+                        ),
+                      ],
+                    );
+                  }
+
+                  return Column(
+                    mainAxisSize: MainAxisSize.max,
+                    mainAxisAlignment: MainAxisAlignment.end,
+                    crossAxisAlignment: CrossAxisAlignment.stretch,
+                    children: [
+                      AwesomeBottomActions(
+                        state: state,
+                        left: Column(
+                          mainAxisSize: MainAxisSize.max,
+                          children: [
+                            if (state is VideoCameraState ||
+                                state is PhotoCameraState)
+                              IconButton(
+                                icon: const Icon(Icons.filter,
+                                    color: Colors.white),
+                                tooltip: 'Filters',
+                                padding: const EdgeInsets.only(
+                                    bottom: 15.0, top: 15.0),
+                                onPressed: () {
+                                  cameraState.openFilterSelection();
+                                  _showFilterBottomSheet(context);
+                                },
+                              ),
+                            if (state is VideoCameraState ||
+                                state is PhotoCameraState)
+                              // No floating left in recording state
+                              IconButton(
+                                  onPressed: () => state.switchCameraSensor(),
+                                  padding: const EdgeInsets.symmetric(
+                                      vertical: 15.0),
+                                  icon: Icon(Icons.repeat,
+                                      color: Colors.white, size: 30))
+                          ],
+                        ),
+                        captureButton: state.captureMode == CaptureMode.photo
+                            ? PhotoCaptureButton(
+                                state: state,
+                                timerController:
+                                    _timerController, // Pass the timer controller
+                                onTap: () {
+                                  if (cameraState.recordedPhotos.length <
+                                      cameraState.maxImages) {
+                                    if (!_timerController.isTimerActive) {
+                                      // If timer is not active, start countdown timer
+                                      _timerController
+                                          .startTimerCountdown(state);
+                                    } else {
+                                      // If timer is active, cancel it
+                                      _timerController.cancelTimer();
+                                    }
+                                  } else {
+                                    ScaffoldMessenger.of(context).showSnackBar(
+                                      const SnackBar(
+                                        content: Text(
+                                          'You’ve reached the maximum number of images you can capture.',
+                                        ),
+                                        duration: Duration(seconds: 2),
+                                      ),
+                                    );
+                                  }
+                                },
+                              )
+                            : ProductionCaptureButton(
+                                state: state,
+                                timerController: _timerController,
+                                onTap: () {
+                                  if (!cameraState.noMoreRecordings) {
+                                    if (state is VideoRecordingCameraState) {
+                                      // Already recording, stop recording
+                                      state.stopRecording();
+                                    } else if (!_timerController
+                                        .isTimerActive) {
+                                      // Not recording and timer not active, start timer or record
+                                      _timerController
+                                          .startTimerCountdown(state);
+                                    } else {
+                                      // Timer is active, cancel it
+                                      _timerController.cancelTimer();
+                                    }
+                                  } else {
+                                    ScaffoldMessenger.of(context).showSnackBar(
+                                      const SnackBar(
+                                        content: Text(
+                                          'Max duration allowed while recording has been reached',
+                                        ),
+                                        duration: Duration(seconds: 2),
+                                      ),
+                                    );
+                                  }
+                                },
+                              ),
+                        right: (state is VideoCameraState &&
+                                    cameraState.justRecorded) ||
+                                (state is PhotoCameraState &&
+                                    cameraState.justCaptured)
+                            ? Padding(
+                                padding: const EdgeInsets.only(bottom: 16.0),
+                                child: ElevatedButton(
+                                  onPressed: state is PhotoCameraState &&
+                                          cameraState.justCaptured
+                                      ? _navigateToImageGallery
+                                      : _navigateToGallery,
+                                  style: ElevatedButton.styleFrom(
+                                    backgroundColor: Colors.white,
+                                    padding: const EdgeInsets.symmetric(
+                                      horizontal: 24,
+                                      vertical: 12,
+                                    ),
+                                  ),
+                                  child: const Text(
+                                    'Next',
+                                    style: TextStyle(
+                                      fontSize: 16,
+                                      fontWeight: FontWeight.bold,
+                                      color: Colors.black,
+                                    ),
+                                  ),
+                                ),
+                              )
+                            : Padding(
+                                padding: const EdgeInsets.only(bottom: 16.0),
+                                child: ElevatedButton(
+                                  onPressed: null,
+                                  style: ElevatedButton.styleFrom(
+                                    backgroundColor: Colors.blue,
+                                    disabledBackgroundColor:
+                                        Colors.white.withOpacity(0.4),
+                                    disabledForegroundColor: Colors.black,
+                                    padding: const EdgeInsets.symmetric(
+                                      horizontal: 24,
+                                      vertical: 12,
+                                    ),
+                                  ),
+                                  child: const Text(
+                                    'Next',
+                                    style: TextStyle(
+                                      fontSize: 16,
+                                      fontWeight: FontWeight.bold,
+                                    ),
+                                  ),
+                                ),
+                              ),
+                      ),
+                      Visibility(
+                        visible: cameraState.isPhoto && cameraState.isVideo,
+                        child: Container(
+                          width: double.infinity,
+                          padding: EdgeInsets.only(bottom: 8),
+                          child: Row(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            mainAxisAlignment: MainAxisAlignment.center,
+                            children: [
+                              // Toggle button for Photo/Video
+                              GestureDetector(
+                                // Toggle between photo and video modes
+                                onTap: () {
+                                  final isCurrentlyPhoto =
+                                      cameraState.isPhotoMode;
+                                  final hasMedia = isCurrentlyPhoto
+                                      ? cameraState.recordedPhotos.isNotEmpty
+                                      : cameraState.recordedVideos.isNotEmpty;
+
+                                  if (hasMedia) {
+                                    _showModeSwitchDialog(state, context,
+                                        toPhoto: !isCurrentlyPhoto);
+                                  } else {
+                                    _performModeSwitch(
+                                        state, !isCurrentlyPhoto);
+                                  }
+                                },
+
+                                child: Container(
+                                  padding: EdgeInsets.symmetric(
+                                      horizontal: 16, vertical: 8),
+                                  decoration: BoxDecoration(
+                                    color: Colors.black.withOpacity(0.5),
+                                    borderRadius: BorderRadius.circular(20),
+                                  ),
+                                  child: Row(
+                                    mainAxisSize: MainAxisSize.min,
+                                    children: [
+                                      // Photo option
+                                      Text(
+                                        'Photo',
+                                        style: TextStyle(
+                                          color: cameraState.isPhotoMode
+                                              ? Colors.amber
+                                              : Colors.white.withOpacity(0.7),
+                                          fontWeight: cameraState.isPhotoMode
+                                              ? FontWeight.bold
+                                              : FontWeight.normal,
+                                        ),
+                                      ),
+
+                                      // Divider
+                                      Container(
+                                        margin:
+                                            EdgeInsets.symmetric(horizontal: 8),
+                                        height: 15,
+                                        width: 1,
+                                        color: Colors.white.withOpacity(0.5),
+                                      ),
+
+                                      // Video option
+                                      Text(
+                                        'Video',
+                                        style: TextStyle(
+                                          color: !cameraState.isPhotoMode
+                                              ? Colors.amber
+                                              : Colors.white.withOpacity(0.7),
+                                          fontWeight: !cameraState.isPhotoMode
+                                              ? FontWeight.bold
+                                              : FontWeight.normal,
+                                        ),
+                                      ),
+                                    ],
+                                  ),
+                                ),
+                              ),
+                            ],
+                          ),
+                        ),
+                      ),
+                    ],
+                  );
+                },
+              ),
+            ),
+
+            // Delete confirmation overlay
+            if (cameraState.showDeleteConfirmation &&
+                cameraState.recordedVideos.isNotEmpty)
+              DeleteConfirmationOverlay(
+                onConfirm: cameraState.deleteLastVideo,
+                onCancel: cameraState.cancelDelete,
+              ),
+
+            if (cameraState.showDeleteImageConfirmationDialog &&
+                cameraState.recordedPhotos.isNotEmpty)
+              DeleteConfirmationOverlay(
+                onConfirm: cameraState.deleteLastImage,
+                onCancel: cameraState.cancelImageDelete,
+              ),
+
+            // Timer display
+            if (_timerController.isTimerActive)
+              Scaffold(
+                backgroundColor: Colors.transparent,
+                body: Center(
+                  child: Container(
+                    height: 150,
+                    width: 150,
+                    decoration: BoxDecoration(
+                      color: Colors.black54,
+                      borderRadius: BorderRadius.circular(20),
+                    ),
+                    child: Center(
+                      child: Text(
+                        '${_timerController.currentTimerSeconds}',
+                        style: const TextStyle(
+                          color: Colors.white,
+                          fontSize: 80,
+                          fontWeight: FontWeight.bold,
+                        ),
+                      ),
+                    ),
+                  ),
+                ),
+              ),
+
+            // Loading indicator for video processing
+            if (cameraState.isProcessingVideos)
+              Container(
+                color: Colors.black54,
+                child: const Center(
+                  child: CircularProgressIndicator(),
+                ),
+              ),
+          ],
+        );
+      },
     );
   }
+}
+
+/// Entry point modification to include Provider
+void main() {
+  runApp(
+    Sizer(
+      builder: (context, orientation, deviceType) {
+        return MaterialApp(
+          theme: ThemeData.dark(),
+          home: const HomePage(),
+        );
+      },
+    ),
+  );
 }

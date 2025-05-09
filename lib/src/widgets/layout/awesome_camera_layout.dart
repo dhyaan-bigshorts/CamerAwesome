@@ -1,6 +1,7 @@
 import 'dart:io';
 
 import 'package:camerawesome/src/orchestrator/models/capture_modes.dart';
+import 'package:camerawesome/src/orchestrator/models/filters/awesome_filter.dart';
 import 'package:camerawesome/src/orchestrator/states/states.dart';
 import 'package:camerawesome/src/widgets/awesome_camera_mode_selector.dart';
 import 'package:camerawesome/src/widgets/camera_awesome_builder.dart';
@@ -21,17 +22,19 @@ class AwesomeCameraLayout extends StatelessWidget {
   // Add reset button functionality
   final VoidCallback? onResetPressed;
   final bool hasRecordedVideos;
+  final AwesomeFilter? selectedFilter;
 
-  AwesomeCameraLayout({
-    super.key,
-    required this.state,
-    OnMediaTap? onMediaTap,
-    Widget? middleContent,
-    Widget? topActions,
-    Widget? bottomActions,
-    this.onResetPressed, // New parameter
-    this.hasRecordedVideos = false, // New parameter
-  })  : middleContent = middleContent ??
+  AwesomeCameraLayout(
+      {super.key,
+      required this.state,
+      OnMediaTap? onMediaTap,
+      Widget? middleContent,
+      Widget? topActions,
+      Widget? bottomActions,
+      this.onResetPressed, // New parameter
+      this.hasRecordedVideos = false, // New parameter
+      this.selectedFilter})
+      : middleContent = middleContent ??
             (Column(
               children: [
                 const Spacer(),

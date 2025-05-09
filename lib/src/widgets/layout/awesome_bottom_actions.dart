@@ -10,10 +10,11 @@ import 'package:flutter/material.dart';
 
 class AwesomeBottomActions extends StatelessWidget {
   final CameraState state;
-  final Widget left;
   final Widget right;
   final Widget captureButton;
   final EdgeInsets padding;
+  final List<Widget> floatingColumn; // Column of floating widgets
+  final Widget? left; // Converted left to floating left
 
   AwesomeBottomActions({
     super.key,
@@ -21,15 +22,17 @@ class AwesomeBottomActions extends StatelessWidget {
     Widget? left,
     Widget? right,
     Widget? captureButton,
+    List<Widget>? floatingColumn,
     OnMediaTap? onMediaTap,
-    this.padding = const EdgeInsets.symmetric(vertical: 8),
+    this.padding = const EdgeInsets.symmetric(vertical: 0, horizontal: 8),
   })  : captureButton = captureButton ??
             ProductionCaptureButton(
               state: state,
             ),
+        floatingColumn = floatingColumn ?? [],
         left = left ??
             (state is VideoRecordingCameraState
-                ? const SizedBox.shrink()
+                ? null // No floating left in recording state
                 : Builder(builder: (context) {
                     final theme = AwesomeThemeProvider.of(context).theme;
                     return AwesomeCameraSwitchButton(
@@ -62,24 +65,62 @@ class AwesomeBottomActions extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return Padding(
-      padding: padding,
-      child: Row(
-        mainAxisAlignment: MainAxisAlignment.spaceEvenly,
-        children: [
-          Expanded(
-            child: Center(
-              child: left,
+    // ensure we have a placeholder for left when it's null
+    final leftWidget = left != null
+        ? GestureDetector(
+            behavior: HitTestBehavior.opaque,
+            child: Padding(
+              padding: const EdgeInsets.only(bottom: 12, left: 12),
+              child: Container(
+                  decoration: BoxDecoration(
+                    color: Colors.black12,
+                    borderRadius: BorderRadius.circular(4),
+                  ),
+                  child: left!),
+            ),
+          )
+        : const SizedBox(width: 48);
+
+    return Stack(
+      alignment: Alignment.bottomCenter,
+      clipBehavior: Clip.none,
+      children: [
+        // the row with just left & right, spread to edges
+        Padding(
+          padding: padding,
+          child: Stack(
+            alignment: Alignment.center, // center children horizontally
+            children: [
+              Row(
+                mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                children: [
+                  leftWidget,
+                  right,
+                ],
+              ),
+              // this will sit exactly in the horizontal center
+              captureButton,
+            ],
+          ),
+        ),
+
+        // any floatingColumn items, unchanged
+        if (floatingColumn.isNotEmpty)
+          Positioned(
+            left: 30,
+            bottom: 90,
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: floatingColumn
+                  .map((w) => Padding(
+                        padding: const EdgeInsets.symmetric(vertical: 8.0),
+                        child: w,
+                      ))
+                  .toList(),
             ),
           ),
-          captureButton,
-          Expanded(
-            child: Center(
-              child: right,
-            ),
-          ),
-        ],
-      ),
+      ],
     );
   }
 }

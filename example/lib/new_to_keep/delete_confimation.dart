@@ -4,15 +4,19 @@ import 'package:flutter/material.dart';
 class DeleteConfirmationOverlay extends StatelessWidget {
   final VoidCallback onConfirm;
   final VoidCallback onCancel;
+  final bool isForImage;
 
   const DeleteConfirmationOverlay({
     super.key,
     required this.onConfirm,
     required this.onCancel,
+    this.isForImage = false,
   });
 
   @override
   Widget build(BuildContext context) {
+    final deleteTarget = isForImage ? 'image' : 'video';
+    final message = 'Are you sure you want to delete the last $deleteTarget?';
     return Material(
       type: MaterialType.transparency,
       child: Container(
@@ -30,8 +34,8 @@ class DeleteConfirmationOverlay extends StatelessWidget {
             child: Column(
               mainAxisSize: MainAxisSize.min,
               children: [
-                const Text(
-                  'Are you sure you want to delete the last video?',
+                Text(
+                  message,
                   textAlign: TextAlign.center,
                   style: TextStyle(
                     color: Colors.white,

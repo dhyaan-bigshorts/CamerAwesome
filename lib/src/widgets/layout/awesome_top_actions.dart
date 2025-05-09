@@ -70,16 +70,16 @@ class AwesomeTopActions extends StatelessWidget {
                   crossAxisAlignment: CrossAxisAlignment.center,
                   mainAxisAlignment: MainAxisAlignment.spaceEvenly,
                   children: [
-                    if (state is VideoCameraState &&
+                    if ((state is VideoCameraState ||
+                            state is PhotoCameraState) &&
                         state.sensorConfig.sensors.first.position ==
                             SensorPosition.back) ...[
                       AwesomeFlashButton(state: state),
                       const SizedBox(height: 12),
                     ],
-                    ...ultraWide!.map((widget) => Padding(
-                          padding: const EdgeInsets.symmetric(vertical: 8.0),
-                          child: widget,
-                        )),
+                    ...ultraWide!.map(
+                      (widget) => widget,
+                    ),
                   ],
                 ),
               ),

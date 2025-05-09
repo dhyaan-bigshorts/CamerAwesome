@@ -183,6 +183,7 @@ class CameraAwesomeBuilder extends StatefulWidget {
       PictureInPictureConfigBuilder? pictureInPictureConfigBuilder,
       AwesomeFilter? defaultFilter,
       List<AwesomeFilter>? availableFilters,
+      AwesomeFilter? currentFilter,
       OnMediaCaptureEvent? onMediaCaptureEvent})
       : this._(
           sensorConfig: sensorConfig ??
@@ -195,6 +196,7 @@ class CameraAwesomeBuilder extends StatefulWidget {
             return AwesomeCameraLayout(
               state: cameraModeState,
               onMediaTap: onMediaTap,
+              selectedFilter: currentFilter,
               topActions: topActionsBuilder?.call(cameraModeState),
               bottomActions: bottomActionsBuilder?.call(cameraModeState),
               middleContent: middleContentBuilder?.call(cameraModeState),

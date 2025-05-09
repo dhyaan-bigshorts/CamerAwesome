@@ -66,40 +66,40 @@ class _AwesomeFilterWidgetState extends State<AwesomeFilterWidget> {
         width: double.infinity,
         child: Stack(
           children: [
-            Positioned.fill(
-              child: StreamBuilder<bool>(
-                stream: widget.state.filterSelectorOpened$,
-                builder: (_, snapshot) {
-                  return AnimatedSwitcher(
-                    duration: widget.animationDuration,
-                    switchInCurve: widget.animationCurve,
-                    switchOutCurve: widget.animationCurve.flipped,
-                    child: snapshot.data == true
-                        ? Align(
-                            key: const ValueKey("NameIndicator"),
-                            alignment: widget.filterListPosition ==
-                                    FilterListPosition.belowButton
-                                ? Alignment.bottomCenter
-                                : Alignment.topCenter,
-                            child:
-                                AwesomeFilterNameIndicator(state: widget.state),
-                          )
-                        : (!kIsWeb &&
-                                Platform
-                                    .isAndroid) // FIXME this should not be here and makes the code ugly
-                            ? Center(
-                                key: const ValueKey("ZoomIndicator"),
-                                child: AwesomeZoomSelector(state: widget.state),
-                              )
-                            : Center(
-                                key: const ValueKey("SensorTypeSelector"),
-                                child: AwesomeSensorTypeSelector(
-                                    state: widget.state),
-                              ),
-                  );
-                },
-              ),
-            ),
+            // Positioned.fill(
+            //   child: StreamBuilder<bool>(
+            //     stream: widget.state.filterSelectorOpened$,
+            //     builder: (_, snapshot) {
+            //       return AnimatedSwitcher(
+            //         duration: widget.animationDuration,
+            //         switchInCurve: widget.animationCurve,
+            //         switchOutCurve: widget.animationCurve.flipped,
+            //         child: snapshot.data == true
+            //             ? Align(
+            //                 key: const ValueKey("NameIndicator"),
+            //                 alignment: widget.filterListPosition ==
+            //                         FilterListPosition.belowButton
+            //                     ? Alignment.bottomCenter
+            //                     : Alignment.topCenter,
+            //                 child:
+            //                     AwesomeFilterNameIndicator(state: widget.state),
+            //               )
+            //             : (!kIsWeb &&
+            //                     Platform
+            //                         .isAndroid) // FIXME this should not be here and makes the code ugly
+            //                 ? Center(
+            //                     key: const ValueKey("ZoomIndicator"),
+            //                     child: AwesomeZoomSelector(state: widget.state),
+            //                   )
+            //                 : Center(
+            //                     key: const ValueKey("SensorTypeSelector"),
+            //                     child: AwesomeSensorTypeSelector(
+            //                         state: widget.state),
+            //                   ),
+            //       );
+            //     },
+            //   ),
+            // ),
             Positioned(
               bottom:
                   widget.filterListPosition == FilterListPosition.belowButton
@@ -115,31 +115,31 @@ class _AwesomeFilterWidgetState extends State<AwesomeFilterWidget> {
         ),
       ),
       if (widget.spacer != null) widget.spacer!,
-      if (widget.state is PhotoCameraState)
-        StreamBuilder<bool>(
-          stream: widget.state.filterSelectorOpened$,
-          builder: (_, snapshot) {
-            return AnimatedClipRect(
-              open: snapshot.data == true,
-              horizontalAnimation: false,
-              verticalAnimation: true,
-              alignment:
-                  widget.filterListPosition == FilterListPosition.belowButton
-                      ? Alignment.topCenter
-                      : Alignment.bottomCenter,
-              duration: widget.animationDuration,
-              curve: widget.animationCurve,
-              reverseCurve: widget.animationCurve.flipped,
-              child: AwesomeFilterSelector(
-                state: widget.state as PhotoCameraState,
-                filterListPosition: widget.filterListPosition,
-                indicator: widget.indicator,
-                filterListBackgroundColor: theme.bottomActionsBackgroundColor,
-                filterListPadding: widget.filterListPadding,
-              ),
-            );
-          },
-        ),
+      // if (widget.state is PhotoCameraState)
+      //   StreamBuilder<bool>(
+      //     stream: widget.state.filterSelectorOpened$,
+      //     builder: (_, snapshot) {
+      //       return AnimatedClipRect(
+      //         open: snapshot.data == true,
+      //         horizontalAnimation: false,
+      //         verticalAnimation: true,
+      //         alignment:
+      //             widget.filterListPosition == FilterListPosition.belowButton
+      //                 ? Alignment.topCenter
+      //                 : Alignment.bottomCenter,
+      //         duration: widget.animationDuration,
+      //         curve: widget.animationCurve,
+      //         reverseCurve: widget.animationCurve.flipped,
+      //         child: AwesomeFilterSelector(
+      //           state: widget.state as PhotoCameraState,
+      //           filterListPosition: widget.filterListPosition,
+      //           indicator: widget.indicator,
+      //           filterListBackgroundColor: theme.bottomActionsBackgroundColor,
+      //           filterListPadding: widget.filterListPadding,
+      //         ),
+      //       );
+      //     },
+      //   ),
     ];
     return Column(
       children: widget.filterListPosition == FilterListPosition.belowButton

@@ -2,6 +2,7 @@
 
 import 'dart:ui';
 
+import 'package:camerawesome/src/photofilters/filters/gradient_filters.dart';
 import 'package:colorfilter_generator/addons.dart';
 import 'package:colorfilter_generator/colorfilter_generator.dart';
 import 'package:colorfilter_generator/presets.dart';
@@ -327,5 +328,343 @@ class AwesomeFilter {
             ColorFilterAddons.brightness(0.04),
           ],
         ).matrix,
+      );
+
+  static List<double> _createRGBScaleMatrix(double r, double g, double b) {
+    return [r, 0, 0, 0, 0, 0, g, 0, 0, 0, 0, 0, b, 0, 0, 0, 0, 0, 1, 0];
+  }
+
+  // RGB Gradient Filters - add these as static getters inside the AwesomeFilter class
+  static AwesomeFilter get Sunrise => AwesomeFilter(
+        name: 'Sunrise',
+        outputFilter: SunriseFilter(),
+        matrix: _createRGBScaleMatrix(1.5, 1.2, 0.8),
+      );
+
+  static AwesomeFilter get Daylight => AwesomeFilter(
+        name: 'Daylight',
+        outputFilter: DaylightFilter(),
+        matrix: _createRGBScaleMatrix(1.3, 1.0, 1.2),
+      );
+
+  static AwesomeFilter get Jungle => AwesomeFilter(
+        name: 'Jungle',
+        outputFilter: JungleFilter(),
+        matrix: _createRGBScaleMatrix(1.2, 1.3, 1.5),
+      );
+
+  static AwesomeFilter get Ocean => AwesomeFilter(
+        name: 'Ocean',
+        outputFilter: OceanFilter(),
+        matrix: _createRGBScaleMatrix(1.0, 1.5, 1.8),
+      );
+
+  static AwesomeFilter get Emerald => AwesomeFilter(
+        name: 'Emerald',
+        outputFilter: EmeraldFilter(),
+        matrix: _createRGBScaleMatrix(0.9, 1.6, 2.0),
+      );
+
+  static AwesomeFilter get Aurora => AwesomeFilter(
+        name: 'Aurora',
+        outputFilter: AuroraFilter(),
+        matrix: _createRGBScaleMatrix(0.8, 1.8, 2.2),
+      );
+
+  static AwesomeFilter get DeepSpace => AwesomeFilter(
+        name: 'Deep Space',
+        outputFilter: DeepSpaceFilter(),
+        matrix: _createRGBScaleMatrix(0.7, 2.0, 2.4),
+      );
+
+  // Add these to your existing AwesomeFilter class definition
+
+  // Additional Gradient Filters - Add these inside your AwesomeFilter class
+
+  // Black to white gradient (for image 6)
+  static AwesomeFilter get BlackWhiteGradient => AwesomeFilter(
+        name: 'Black & White Gradient',
+        outputFilter: BlackWhiteGradientFilter(),
+        matrix: [
+          0.33,
+          0.33,
+          0.33,
+          0,
+          0,
+          0.33,
+          0.33,
+          0.33,
+          0,
+          0,
+          0.33,
+          0.33,
+          0.33,
+          0,
+          0,
+          0,
+          0,
+          0,
+          1,
+          0
+        ],
+      );
+
+  // Cool tone gradient (for image 7)
+  static AwesomeFilter get CoolToneGradient => AwesomeFilter(
+        name: 'Cool Tone',
+        outputFilter: CoolToneGradientFilter(),
+        matrix: _createRGBScaleMatrix(0.7, 0.9, 1.5),
+      );
+
+  // Warm tone gradient (for image 8)
+  static AwesomeFilter get WarmToneGradient => AwesomeFilter(
+        name: 'Warm Tone',
+        outputFilter: WarmToneGradientFilter(),
+        matrix: _createRGBScaleMatrix(1.5, 0.9, 0.7),
+      );
+
+  // High contrast gradient (for image 9)
+  static AwesomeFilter get HighContrastGradient => AwesomeFilter(
+        name: 'High Contrast',
+        outputFilter: HighContrastGradientFilter(),
+        matrix: [
+          1.3,
+          0,
+          0,
+          0,
+          0,
+          0,
+          1.3,
+          0,
+          0,
+          0,
+          0,
+          0,
+          1.3,
+          0,
+          0,
+          0,
+          0,
+          0,
+          1,
+          0
+        ],
+      );
+
+  // Pastel gradient (for image 10)
+  static AwesomeFilter get PastelGradient => AwesomeFilter(
+        name: 'Pastel',
+        outputFilter: PastelGradientFilter(),
+        matrix: [
+          1.1,
+          0,
+          0,
+          0,
+          20,
+          0,
+          1.1,
+          0,
+          0,
+          20,
+          0,
+          0,
+          1.3,
+          0,
+          20,
+          0,
+          0,
+          0,
+          0.9,
+          0
+        ],
+      );
+
+  // Dual tone gradient (for image 11)
+  static AwesomeFilter get DualToneGradient => AwesomeFilter(
+        name: 'Dual Tone',
+        outputFilter: DualToneGradientFilter(),
+        matrix: _createRGBScaleMatrix(1.4, 0.7, 1.4),
+      );
+
+  // Rainbow vibrance (for image 12)
+  static AwesomeFilter get RainbowVibrance => AwesomeFilter(
+        name: 'Rainbow Vibrance',
+        outputFilter: RainbowVibranceFilter(),
+        matrix: [
+          1.3,
+          0,
+          0,
+          0,
+          0,
+          0,
+          1.3,
+          0,
+          0,
+          0,
+          0,
+          0,
+          1.3,
+          0,
+          0,
+          0,
+          0,
+          0,
+          1.2,
+          0
+        ],
+      );
+
+  // Nebula gradient (for image 13)
+  static AwesomeFilter get NebulaGradient => AwesomeFilter(
+        name: 'Nebula',
+        outputFilter: NebulaGradientFilter(),
+        matrix: [
+          0.8,
+          0,
+          0,
+          0,
+          0,
+          0,
+          0.9,
+          0,
+          0,
+          0,
+          0,
+          0,
+          1.7,
+          0,
+          30,
+          0,
+          0,
+          0,
+          1,
+          0
+        ],
+      );
+
+  // Sunset gradient (for image 14)
+  static AwesomeFilter get SunsetGradient => AwesomeFilter(
+        name: 'Sunset',
+        outputFilter: SunsetGradientFilter(),
+        matrix: [
+          1.4,
+          0,
+          0,
+          0,
+          20,
+          0,
+          0.8,
+          0,
+          0,
+          0,
+          0,
+          0,
+          1.2,
+          0,
+          10,
+          0,
+          0,
+          0,
+          1,
+          0
+        ],
+      );
+
+  // Neon gradient (for image 15)
+  static AwesomeFilter get NeonGradient => AwesomeFilter(
+        name: 'Neon',
+        outputFilter: NeonGradientFilter(),
+        matrix: [
+          1.4,
+          0,
+          0,
+          0,
+          10,
+          0,
+          1.4,
+          0,
+          0,
+          10,
+          0,
+          0,
+          1.4,
+          0,
+          10,
+          0,
+          0,
+          0,
+          1,
+          0
+        ],
+      );
+
+  // Deep sea gradient (for image 16)
+  static AwesomeFilter get DeepSeaGradient => AwesomeFilter(
+        name: 'Deep Sea',
+        outputFilter: DeepSeaGradientFilter(),
+        matrix: _createRGBScaleMatrix(0.6, 1.3, 1.5),
+      );
+
+  // Tech gradient (for image 17)
+  static AwesomeFilter get TechGradient => AwesomeFilter(
+        name: 'Tech',
+        outputFilter: TechGradientFilter(),
+        matrix: _createRGBScaleMatrix(0.7, 1.5, 1.3),
+      );
+
+  // Cyber gradient (for image 18)
+  static AwesomeFilter get CyberGradient => AwesomeFilter(
+        name: 'Cyber',
+        outputFilter: CyberGradientFilter(),
+        matrix: [
+          1.3,
+          0,
+          0,
+          0,
+          0,
+          0,
+          0.9,
+          0,
+          0,
+          0,
+          0,
+          0,
+          1.3,
+          0,
+          30,
+          0,
+          0,
+          0,
+          1,
+          0
+        ],
+      );
+
+  // Mint chocolate gradient (for image 19)
+  static AwesomeFilter get MintChocolateGradient => AwesomeFilter(
+        name: 'Mint Chocolate',
+        outputFilter: MintChocolateGradientFilter(),
+        matrix: [
+          1.2,
+          0,
+          0,
+          0,
+          0,
+          0,
+          1.4,
+          0,
+          0,
+          0,
+          0,
+          0,
+          0.8,
+          0,
+          0,
+          0,
+          0,
+          0,
+          1,
+          0
+        ],
       );
 }
